@@ -202,7 +202,7 @@ QSvgTinyDocument * QSvgTinyDocument::load(const QString &fileName)
         return load(qt_inflateSvgzDataFrom(&file));
     }
 
-    QSvgTinyDocument *doc = 0;
+    QSvgTinyDocument *doc = nullptr;
     QSvgHandler handler(&file);
     if (handler.ok()) {
         doc = handler.document();
@@ -248,7 +248,7 @@ QSvgTinyDocument * QSvgTinyDocument::load(QXmlStreamReader *contents)
 {
     QSvgHandler handler(contents);
 
-    QSvgTinyDocument *doc = 0;
+    QSvgTinyDocument *doc = nullptr;
     if (handler.ok()) {
         doc = handler.document();
         doc->m_animationDuration = handler.animationDuration();
@@ -433,8 +433,16 @@ void QSvgTinyDocument::draw(QPainter *p, QSvgExtraStates &)
     draw(p);
 }
 
+static bool isValidMatrix(const QTransform &transform)
+{
+    qreal determinant = transform.determinant();
+    return qIsFinite(determinant);
+}
+
 void QSvgTinyDocument::mapSourceToTarget(QPainter *p, const QRectF &targetRect, const QRectF &sourceRect)
 {
+    QTransform oldTransform = p->worldTransform();
+
     QRectF target = targetRect;
     if (target.isEmpty()) {
         QPaintDevice *dev = p->device();
@@ -487,6 +495,9 @@ void QSvgTinyDocument::mapSourceToTarget(QPainter *p, const QRectF &targetRect, 
         }
 #endif
     }
+
+    if (!isValidMatrix(p->worldTransform()))
+        p->setWorldTransform(oldTransform);
 }
 
 QRectF QSvgTinyDocument::boundsOnElement(const QString &id) const
