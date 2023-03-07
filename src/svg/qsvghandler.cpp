@@ -1,41 +1,5 @@
-/****************************************************************************
-**
-** Copyright (C) 2021 The Qt Company Ltd.
-** Contact: https://www.qt.io/licensing/
-**
-** This file is part of the Qt SVG module of the Qt Toolkit.
-**
-** $QT_BEGIN_LICENSE:LGPL$
-** Commercial License Usage
-** Licensees holding valid commercial Qt licenses may use this file in
-** accordance with the commercial license agreement provided with the
-** Software or, alternatively, in accordance with the terms contained in
-** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see https://www.qt.io/terms-conditions. For further
-** information use the contact form at https://www.qt.io/contact-us.
-**
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 3 as published by the Free Software
-** Foundation and appearing in the file LICENSE.LGPL3 included in the
-** packaging of this file. Please review the following information to
-** ensure the GNU Lesser General Public License version 3 requirements
-** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU
-** General Public License version 2.0 or (at your option) the GNU General
-** Public license version 3 or any later version approved by the KDE Free
-** Qt Foundation. The licenses are as published by the Free Software
-** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
-** included in the packaging of this file. Please review the following
-** information to ensure the GNU General Public License requirements will
-** be met: https://www.gnu.org/licenses/gpl-2.0.html and
-** https://www.gnu.org/licenses/gpl-3.0.html.
-**
-** $QT_END_LICENSE$
-**
-****************************************************************************/
+// Copyright (C) 2022 The Qt Company Ltd.
+// SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
 
 #include "qplatformdefs.h"
 
@@ -231,113 +195,7 @@ struct QSvgAttributes
 
 QSvgAttributes::QSvgAttributes(const QXmlStreamAttributes &xmlAttributes, QSvgHandler *handler)
 {
-#ifndef QT_NO_CSSPARSER
-    QStringView style = xmlAttributes.value(QLatin1String("style"));
-    if (!style.isEmpty()) {
-        handler->parseCSStoXMLAttrs(style.toString(), &m_cssAttributes);
-        for (int j = 0; j < m_cssAttributes.count(); ++j) {
-            const QSvgCssAttribute &attribute = m_cssAttributes.at(j);
-            QStringView name = attribute.name;
-            QStringView value = attribute.value;
-            if (name.isEmpty())
-                continue;
-
-            switch (name.at(0).unicode()) {
-
-            case 'c':
-                if (name == QLatin1String("color"))
-                    color = value;
-                else if (name == QLatin1String("color-opacity"))
-                    colorOpacity = value;
-                else if (name == QLatin1String("comp-op"))
-                    compOp = value;
-                break;
-
-            case 'd':
-                if (name == QLatin1String("display"))
-                    display = value;
-                break;
-
-            case 'f':
-                if (name == QLatin1String("fill"))
-                    fill = value;
-                else if (name == QLatin1String("fill-rule"))
-                    fillRule = value;
-                else if (name == QLatin1String("fill-opacity"))
-                    fillOpacity = value;
-                else if (name == QLatin1String("font-family"))
-                    fontFamily = value;
-                else if (name == QLatin1String("font-size"))
-                    fontSize = value;
-                else if (name == QLatin1String("font-style"))
-                    fontStyle = value;
-                else if (name == QLatin1String("font-weight"))
-                    fontWeight = value;
-                else if (name == QLatin1String("font-variant"))
-                    fontVariant = value;
-                break;
-            case 'i':
-                if (name == QLatin1String("image-rendering"))
-                    imageRendering = value;
-                break;
-
-            case 'o':
-                if (name == QLatin1String("opacity"))
-                    opacity = value;
-                else if (name == QLatin1String("offset"))
-                    offset = value;
-                break;
-
-            case 's':
-                if (name.length() > 5 && name.mid(1, 5) == QLatin1String("troke")) {
-                    QStringView strokeRef = name.mid(6, name.length() - 6);
-                    if (strokeRef.isEmpty())
-                        stroke = value;
-                    else if (strokeRef == QLatin1String("-dasharray"))
-                        strokeDashArray = value;
-                    else if (strokeRef == QLatin1String("-dashoffset"))
-                        strokeDashOffset = value;
-                    else if (strokeRef == QLatin1String("-linecap"))
-                        strokeLineCap = value;
-                    else if (strokeRef == QLatin1String("-linejoin"))
-                        strokeLineJoin = value;
-                    else if (strokeRef == QLatin1String("-miterlimit"))
-                        strokeMiterLimit = value;
-                    else if (strokeRef == QLatin1String("-opacity"))
-                        strokeOpacity = value;
-                    else if (strokeRef == QLatin1String("-width"))
-                        strokeWidth = value;
-                }
-                else if (name == QLatin1String("stop-color"))
-                    stopColor = value;
-                else if (name == QLatin1String("stop-opacity"))
-                    stopOpacity = value;
-                break;
-
-            case 't':
-                if (name == QLatin1String("text-anchor"))
-                    textAnchor = value;
-                else if (name == QLatin1String("transform"))
-                    transform = value;
-                break;
-
-            case 'v':
-                if (name == QLatin1String("vector-effect"))
-                    vectorEffect = value;
-                else if (name == QLatin1String("visibility"))
-                    visibility = value;
-                break;
-
-            default:
-                break;
-           }
-        }
-    }
-#else
-    Q_UNUSED(handler);
-#endif // QT_NO_CSSPARSER
-
-    for (int i = 0; i < xmlAttributes.count(); ++i) {
+    for (int i = 0; i < xmlAttributes.size(); ++i) {
         const QXmlStreamAttribute &attribute = xmlAttributes.at(i);
         QStringView name = attribute.qualifiedName();
         if (name.isEmpty())
@@ -394,8 +252,8 @@ QSvgAttributes::QSvgAttributes(const QXmlStreamAttributes &xmlAttributes, QSvgHa
             break;
 
         case 's':
-            if (name.length() > 5 && name.mid(1, 5) == QLatin1String("troke")) {
-                QStringView strokeRef = name.mid(6, name.length() - 6);
+            if (name.size() > 5 && name.mid(1, 5) == QLatin1String("troke")) {
+                QStringView strokeRef = name.mid(6, name.size() - 6);
                 if (strokeRef.isEmpty())
                     stroke = value;
                 else if (strokeRef == QLatin1String("-dasharray"))
@@ -412,8 +270,7 @@ QSvgAttributes::QSvgAttributes(const QXmlStreamAttributes &xmlAttributes, QSvgHa
                     strokeOpacity = value;
                 else if (strokeRef == QLatin1String("-width"))
                     strokeWidth = value;
-            }
-            else if (name == QLatin1String("stop-color"))
+            } else if (name == QLatin1String("stop-color"))
                 stopColor = value;
             else if (name == QLatin1String("stop-opacity"))
                 stopOpacity = value;
@@ -443,6 +300,112 @@ QSvgAttributes::QSvgAttributes(const QXmlStreamAttributes &xmlAttributes, QSvgHa
         }
     }
 
+    // If a style attribute is present, let its attribute settings override the plain attribute
+    // values. The spec seems to indicate that, and it is common behavior in svg renderers.
+#ifndef QT_NO_CSSPARSER
+    QStringView style = xmlAttributes.value(QLatin1String("style"));
+    if (!style.isEmpty()) {
+        handler->parseCSStoXMLAttrs(style.toString(), &m_cssAttributes);
+        for (int j = 0; j < m_cssAttributes.size(); ++j) {
+            const QSvgCssAttribute &attribute = m_cssAttributes.at(j);
+            QStringView name = attribute.name;
+            QStringView value = attribute.value;
+            if (name.isEmpty())
+                continue;
+
+            switch (name.at(0).unicode()) {
+
+            case 'c':
+                if (name == QLatin1String("color"))
+                    color = value;
+                else if (name == QLatin1String("color-opacity"))
+                    colorOpacity = value;
+                else if (name == QLatin1String("comp-op"))
+                    compOp = value;
+                break;
+
+            case 'd':
+                if (name == QLatin1String("display"))
+                    display = value;
+                break;
+
+            case 'f':
+                if (name == QLatin1String("fill"))
+                    fill = value;
+                else if (name == QLatin1String("fill-rule"))
+                    fillRule = value;
+                else if (name == QLatin1String("fill-opacity"))
+                    fillOpacity = value;
+                else if (name == QLatin1String("font-family"))
+                    fontFamily = value;
+                else if (name == QLatin1String("font-size"))
+                    fontSize = value;
+                else if (name == QLatin1String("font-style"))
+                    fontStyle = value;
+                else if (name == QLatin1String("font-weight"))
+                    fontWeight = value;
+                else if (name == QLatin1String("font-variant"))
+                    fontVariant = value;
+                break;
+            case 'i':
+                if (name == QLatin1String("image-rendering"))
+                    imageRendering = value;
+                break;
+
+            case 'o':
+                if (name == QLatin1String("opacity"))
+                    opacity = value;
+                else if (name == QLatin1String("offset"))
+                    offset = value;
+                break;
+
+            case 's':
+                if (name.size() > 5 && name.mid(1, 5) == QLatin1String("troke")) {
+                    QStringView strokeRef = name.mid(6, name.size() - 6);
+                    if (strokeRef.isEmpty())
+                        stroke = value;
+                    else if (strokeRef == QLatin1String("-dasharray"))
+                        strokeDashArray = value;
+                    else if (strokeRef == QLatin1String("-dashoffset"))
+                        strokeDashOffset = value;
+                    else if (strokeRef == QLatin1String("-linecap"))
+                        strokeLineCap = value;
+                    else if (strokeRef == QLatin1String("-linejoin"))
+                        strokeLineJoin = value;
+                    else if (strokeRef == QLatin1String("-miterlimit"))
+                        strokeMiterLimit = value;
+                    else if (strokeRef == QLatin1String("-opacity"))
+                        strokeOpacity = value;
+                    else if (strokeRef == QLatin1String("-width"))
+                        strokeWidth = value;
+                } else if (name == QLatin1String("stop-color"))
+                    stopColor = value;
+                else if (name == QLatin1String("stop-opacity"))
+                    stopOpacity = value;
+                break;
+
+            case 't':
+                if (name == QLatin1String("text-anchor"))
+                    textAnchor = value;
+                else if (name == QLatin1String("transform"))
+                    transform = value;
+                break;
+
+            case 'v':
+                if (name == QLatin1String("vector-effect"))
+                    vectorEffect = value;
+                else if (name == QLatin1String("visibility"))
+                    visibility = value;
+                break;
+
+            default:
+                break;
+            }
+        }
+    }
+#else
+    Q_UNUSED(handler);
+#endif // QT_NO_CSSPARSER
 }
 
 #ifndef QT_NO_CSSPARSER
@@ -694,7 +657,7 @@ static qreal toDouble(QStringView str, bool *ok = NULL)
     const QChar *c = str.constData();
     qreal res = (c == nullptr ? qreal{} : toDouble(c));
     if (ok)
-        *ok = (c == (str.constData() + str.length()));
+        *ok = (c == (str.constData() + str.size()));
     return res;
 }
 
@@ -835,7 +798,7 @@ static bool resolveColor(QStringView colorStr, QColor &color, QSvgHandler *handl
                 // #rrggbb is very very common, so let's tackle it here
                 // rather than falling back to QColor
                 QRgb rgb;
-                bool ok = qsvg_get_hex_rgb(colorStrTr.constData(), colorStrTr.length(), &rgb);
+                bool ok = qsvg_get_hex_rgb(colorStrTr.constData(), colorStrTr.size(), &rgb);
                 if (ok)
                     color.setRgb(rgb);
                 return ok;
@@ -845,7 +808,7 @@ static bool resolveColor(QStringView colorStr, QColor &color, QSvgHandler *handl
         case 'r':
             {
                 // starts with "rgb(", ends with ")" and consists of at least 7 characters "rgb(,,)"
-                if (colorStrTr.length() >= 7 && colorStrTr.at(colorStrTr.length() - 1) == QLatin1Char(')')
+                if (colorStrTr.size() >= 7 && colorStrTr.at(colorStrTr.size() - 1) == QLatin1Char(')')
                     && colorStrTr.mid(0, 4) == QLatin1String("rgb(")) {
                     const QChar *s = colorStrTr.constData() + 4;
                     QList<qreal> compo = parseNumbersList(s);
@@ -883,7 +846,7 @@ static bool resolveColor(QStringView colorStr, QColor &color, QSvgHandler *handl
             break;
     }
 
-    color = QColor(colorStrTr.toString());
+    color = QColor::fromString(colorStrTr.toString());
     return color.isValid();
 }
 
@@ -1034,8 +997,8 @@ static void parseBrush(QSvgNode *node,
 
         //fill attribute handling
         if ((!attributes.fill.isEmpty()) && (attributes.fill != QT_INHERIT) ) {
-            if (attributes.fill.length() > 3 && attributes.fill.mid(0, 3) == QLatin1String("url")) {
-                QString value = attributes.fill.mid(3, attributes.fill.length() - 3).toString();
+            if (attributes.fill.size() > 3 && attributes.fill.mid(0, 3) == QLatin1String("url")) {
+                QString value = attributes.fill.mid(3, attributes.fill.size() - 3).toString();
                 QSvgStyleProperty *style = styleFromUrl(node, value);
                 if (style) {
                     if (style->type() == QSvgStyleProperty::SOLID_COLOR || style->type() == QSvgStyleProperty::GRADIENT)
@@ -1066,7 +1029,7 @@ static QTransform parseTransformationMatrix(QStringView value)
 
     QTransform matrix;
     const QChar *str = value.constData();
-    const QChar *end = str + value.length();
+    const QChar *end = str + value.size();
 
     while (str < end) {
         if (str->isSpace() || *str == QLatin1Char(',')) {
@@ -1145,22 +1108,22 @@ static QTransform parseTransformationMatrix(QStringView value)
         ++str;
 
         if(state == Matrix) {
-            if(points.count() != 6)
+            if(points.size() != 6)
                 goto error;
             matrix = QTransform(points[0], points[1],
                                 points[2], points[3],
                                 points[4], points[5]) * matrix;
         } else if (state == Translate) {
-            if (points.count() == 1)
+            if (points.size() == 1)
                 matrix.translate(points[0], 0);
-            else if (points.count() == 2)
+            else if (points.size() == 2)
                 matrix.translate(points[0], points[1]);
             else
                 goto error;
         } else if (state == Rotate) {
-            if(points.count() == 1) {
+            if(points.size() == 1) {
                 matrix.rotate(points[0]);
-            } else if (points.count() == 3) {
+            } else if (points.size() == 3) {
                 matrix.translate(points[1], points[2]);
                 matrix.rotate(points[0]);
                 matrix.translate(-points[1], -points[2]);
@@ -1168,19 +1131,19 @@ static QTransform parseTransformationMatrix(QStringView value)
                 goto error;
             }
         } else if (state == Scale) {
-            if (points.count() < 1 || points.count() > 2)
+            if (points.size() < 1 || points.size() > 2)
                 goto error;
             qreal sx = points[0];
             qreal sy = sx;
-            if(points.count() == 2)
+            if(points.size() == 2)
                 sy = points[1];
             matrix.scale(sx, sy);
         } else if (state == SkewX) {
-            if (points.count() != 1)
+            if (points.size() != 1)
                 goto error;
             matrix.shear(qTan(qDegreesToRadians(points[0])), 0);
         } else if (state == SkewY) {
-            if (points.count() != 1)
+            if (points.size() != 1)
                 goto error;
             matrix.shear(0, qTan(qDegreesToRadians(points[0])));
         }
@@ -1203,8 +1166,8 @@ static void parsePen(QSvgNode *node,
 
         //stroke attribute handling
         if ((!attributes.stroke.isEmpty()) && (attributes.stroke != QT_INHERIT) ) {
-            if (attributes.stroke.length() > 3 && attributes.stroke.mid(0, 3) == QLatin1String("url")) {
-                 QString value = attributes.stroke.mid(3, attributes.stroke.length() - 3).toString();
+            if (attributes.stroke.size() > 3 && attributes.stroke.mid(0, 3) == QLatin1String("url")) {
+                 QString value = attributes.stroke.mid(3, attributes.stroke.size() - 3).toString();
                     QSvgStyleProperty *style = styleFromUrl(node, value);
                     if (style) {
                         if (style->type() == QSvgStyleProperty::SOLID_COLOR || style->type() == QSvgStyleProperty::GRADIENT)
@@ -1351,7 +1314,7 @@ static void parseFont(QSvgNode *node,
     if (!attributes.fontFamily.isEmpty() && attributes.fontFamily != QT_INHERIT) {
         QString family = attributes.fontFamily.toString().trimmed();
         if (family.at(0) == QLatin1Char('\'') || family.at(0) == QLatin1Char('\"'))
-            family = family.mid(1, family.length() - 2);
+            family = family.mid(1, family.size() - 2);
         fontStyle->setFamily(family);
     }
 
@@ -1621,7 +1584,7 @@ static bool parsePathDataFast(QStringView dataStr, QPainterPath &path)
         if (pathElem == QLatin1Char('z') || pathElem == QLatin1Char('Z'))
             arg.append(0);//dummy
         const qreal *num = arg.constData();
-        int count = arg.count();
+        int count = arg.size();
         while (ok && count > 0) {
             qreal offsetX = x;        // correction offsets
             qreal offsetY = y;        // for relative commands
@@ -1935,13 +1898,13 @@ static bool parseStyle(QSvgNode *node,
 static void parseCSStoXMLAttrs(const QList<QCss::Declaration> &declarations,
                                QXmlStreamAttributes &attributes)
 {
-    for (int i = 0; i < declarations.count(); ++i) {
+    for (int i = 0; i < declarations.size(); ++i) {
         const QCss::Declaration &decl = declarations.at(i);
         if (decl.d->property.isEmpty())
             continue;
         QCss::Value val = decl.d->values.first();
         QString valueStr;
-        const int valCount = decl.d->values.count();
+        const int valCount = decl.d->values.size();
         if (valCount != 1) {
             for (int i = 0; i < valCount; ++i) {
                 valueStr += decl.d->values[i].toString();
@@ -1958,9 +1921,9 @@ static void parseCSStoXMLAttrs(const QList<QCss::Declaration> &declarations,
             QStringList lst = val.variant.toStringList();
             valueStr.append(lst.at(0));
             valueStr.append(QLatin1Char('('));
-            for (int i = 1; i < lst.count(); ++i) {
+            for (int i = 1; i < lst.size(); ++i) {
                 valueStr.append(lst.at(i));
-                if ((i +1) < lst.count())
+                if ((i +1) < lst.size())
                     valueStr.append(QLatin1Char(','));
             }
             valueStr.append(QLatin1Char(')'));
@@ -2081,7 +2044,7 @@ static bool parseCoreNode(QSvgNode *node,
     QStringList fonts;
     QString xmlClassStr;
 
-    for (int i = 0; i < attributes.count(); ++i) {
+    for (int i = 0; i < attributes.size(); ++i) {
         const QXmlStreamAttribute &attribute = attributes.at(i);
         QStringView name = attribute.qualifiedName();
         if (name.isEmpty())
@@ -2398,7 +2361,7 @@ static bool parseAnimateColorNode(QSvgNode *parent,
         colors.append(endColor);
     } else {
         QStringList str = valuesStr.split(QLatin1Char(';'));
-        colors.reserve(str.count());
+        colors.reserve(str.size());
         QStringList::const_iterator itr;
         for (itr = str.constBegin(); itr != str.constEnd(); ++itr) {
             QColor color;
@@ -2502,6 +2465,8 @@ static bool parseAnimateTransformNode(QSvgNode *parent,
             ++s;
         }
     }
+    if (vals.size() % 3 != 0)
+        return false;
 
     bool ok = true;
     int begin = parseClockValue(beginStr, &ok);
@@ -2862,7 +2827,7 @@ static void parseBaseGradient(QSvgNode *node,
 
     QTransform matrix;
     QGradient *grad = gradProp->qgradient();
-    if (!link.isEmpty()) {
+    if (node && !link.isEmpty()) {
         QSvgStyleProperty *prop = node->styleProperty(link);
         //qDebug()<<"inherited "<<prop<<" ("<<link<<")";
         if (prop && prop->type() == QSvgStyleProperty::GRADIENT) {
@@ -2993,7 +2958,7 @@ static QSvgNode *createPolygonNode(QSvgNode *parent,
     //same QPolygon parsing is in createPolylineNode
     const QChar *s = pointsStr.constData();
     QList<qreal> points = parseNumbersList(s);
-    QPolygonF poly(points.count()/2);
+    QPolygonF poly(points.size()/2);
     for (int i = 0; i < poly.size(); ++i)
         poly[i] = QPointF(points.at(2 * i), points.at(2 * i + 1));
     QSvgNode *polygon = new QSvgPolygon(parent, poly);
@@ -3009,7 +2974,7 @@ static QSvgNode *createPolylineNode(QSvgNode *parent,
     //same QPolygon parsing is in createPolygonNode
     const QChar *s = pointsStr.constData();
     QList<qreal> points = parseNumbersList(s);
-    QPolygonF poly(points.count()/2);
+    QPolygonF poly(points.size()/2);
     for (int i = 0; i < poly.size(); ++i)
         poly[i] = QPointF(points.at(2 * i), points.at(2 * i + 1));
 
@@ -3175,12 +3140,12 @@ static bool parseStopNode(QSvgStyleProperty *parent,
     cssNode.ptr = &anim;
     QList<QCss::Declaration> decls = handler->selector()->declarationsForNode(cssNode);
 
-    for (int i = 0; i < decls.count(); ++i) {
+    for (int i = 0; i < decls.size(); ++i) {
         const QCss::Declaration &decl = decls.at(i);
 
         if (decl.d->property.isEmpty())
             continue;
-        if (decl.d->values.count() != 1)
+        if (decl.d->values.size() != 1)
             continue;
         QCss::Value val = decl.d->values.first();
         QString valueStr = val.toString();
@@ -3288,7 +3253,7 @@ static QSvgNode *createSvgNode(QSvgNode *parent,
         viewBoxStr = viewBoxStr.replace(QLatin1Char('\t'), QLatin1Char(','));
         viewBoxValues = viewBoxStr.split(QLatin1Char(','), Qt::SkipEmptyParts);
     }
-    if (viewBoxValues.count() == 4) {
+    if (viewBoxValues.size() == 4) {
         QString xStr      = viewBoxValues.at(0).trimmed();
         QString yStr      = viewBoxValues.at(1).trimmed();
         QString widthStr  = viewBoxValues.at(2).trimmed();
@@ -3444,7 +3409,7 @@ static FactoryMethod findGroupFactory(const QString &name)
     if (name.isEmpty())
         return 0;
 
-    QStringView ref = QStringView{name}.mid(1, name.length() - 1);
+    QStringView ref = QStringView{name}.mid(1, name.size() - 1);
     switch (name.at(0).unicode()) {
     case 'd':
         if (ref == QLatin1String("efs")) return createDefsNode;
@@ -3467,7 +3432,7 @@ static FactoryMethod findGraphicsFactory(const QString &name)
     if (name.isEmpty())
         return 0;
 
-    QStringView ref = QStringView{name}.mid(1, name.length() - 1);
+    QStringView ref = QStringView{name}.mid(1, name.size() - 1);
     switch (name.at(0).unicode()) {
     case 'a':
         if (ref == QLatin1String("nimation")) return createAnimationNode;
@@ -3516,7 +3481,7 @@ static ParseMethod findUtilFactory(const QString &name)
     if (name.isEmpty())
         return 0;
 
-    QStringView ref = QStringView{name}.mid(1, name.length() - 1);
+    QStringView ref = QStringView{name}.mid(1, name.size() - 1);
     switch (name.at(0).unicode()) {
     case 'a':
         if (ref.isEmpty()) return parseAnchorNode;
@@ -3568,7 +3533,7 @@ static StyleFactoryMethod findStyleFactoryMethod(const QString &name)
     if (name.isEmpty())
         return 0;
 
-    QStringView ref = QStringView{name}.mid(1, name.length() - 1);
+    QStringView ref = QStringView{name}.mid(1, name.size() - 1);
     switch (name.at(0).unicode()) {
     case 'f':
         if (ref == QLatin1String("ont")) return createFontNode;
@@ -3597,7 +3562,7 @@ static StyleParseMethod findStyleUtilFactoryMethod(const QString &name)
     if (name.isEmpty())
         return 0;
 
-    QStringView ref = QStringView{name}.mid(1, name.length() - 1);
+    QStringView ref = QStringView{name}.mid(1, name.size() - 1);
     switch (name.at(0).unicode()) {
     case 'f':
         if (ref == QLatin1String("ont-face")) return parseFontFaceNode;
@@ -3926,7 +3891,7 @@ void QSvgHandler::resolveGradients(QSvgNode *node, int nestedDepth)
 
 void QSvgHandler::resolveNodes()
 {
-    for (QSvgUse *useNode : qAsConst(m_toBeResolved)) {
+    for (QSvgUse *useNode : std::as_const(m_toBeResolved)) {
         const auto parent = useNode->parent();
         if (!parent)
             continue;
@@ -4001,7 +3966,7 @@ void QSvgHandler::pushColor(const QColor &color)
 
 void QSvgHandler::pushColorCopy()
 {
-    if (m_colorTagCount.count())
+    if (m_colorTagCount.size())
         ++m_colorTagCount.top();
     else
         pushColor(Qt::black);
@@ -4009,7 +3974,7 @@ void QSvgHandler::pushColorCopy()
 
 void QSvgHandler::popColor()
 {
-    if (m_colorTagCount.count()) {
+    if (m_colorTagCount.size()) {
         if (!--m_colorTagCount.top()) {
             m_colorStack.pop();
             m_colorTagCount.pop();
