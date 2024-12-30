@@ -14,12 +14,23 @@
 #include <qtextdocument.h>
 #include <private/qfixed_p.h>
 
+#include <QElapsedTimer>
+#include <QLoggingCategory>
+
 #include <math.h>
 #include <limits.h>
 
 QT_BEGIN_NAMESPACE
 
 Q_LOGGING_CATEGORY(lcSvgDraw, "qt.svg.draw")
+Q_LOGGING_CATEGORY(lcSvgTiming, "qt.svg.timing")
+
+#define QT_SVG_TIMING_ENTER \
+    QElapsedTimer qtSvgTimer; qtSvgTimer.start();
+
+#define QT_SVG_TIMING_EXIT(TYPE) \
+    if (Q_UNLIKELY(lcSvgTiming().isDebugEnabled())) \
+        qCDebug(lcSvgTiming) << "Drawing" << TYPE << "took" << (qtSvgTimer.nsecsElapsed() / 1000000.0f) << "ms";
 
 #define QT_SVG_DRAW_SHAPE(command)                          \
     { qreal oldOpacity = p->opacity();                      \
@@ -74,10 +85,12 @@ QRectF QSvgEllipse::bounds(QPainter *p, QSvgExtraStates &) const
 
 void QSvgEllipse::draw(QPainter *p, QSvgExtraStates &states)
 {
+    QT_SVG_TIMING_ENTER
     applyStyle(p, states);
     if (shouldDrawNode(p, states))
         QT_SVG_DRAW_SHAPE(p->drawEllipse(m_bounds));
     revertStyle(p, states);
+    QT_SVG_TIMING_EXIT("Ellipse")
 }
 
 QSvgArc::QSvgArc(QSvgNode *parent, const QPainterPath &path)
@@ -87,6 +100,7 @@ QSvgArc::QSvgArc(QSvgNode *parent, const QPainterPath &path)
 
 void QSvgArc::draw(QPainter *p, QSvgExtraStates &states)
 {
+    QT_SVG_TIMING_ENTER
     applyStyle(p, states);
     if (shouldDrawNode(p, states)) {
         if (p->pen().widthF() != 0) {
@@ -97,6 +111,7 @@ void QSvgArc::draw(QPainter *p, QSvgExtraStates &states)
         }
     }
     revertStyle(p, states);
+    QT_SVG_TIMING_EXIT("Arc")
 }
 
 QSvgImage::QSvgImage(QSvgNode *parent, const QImage &image,
@@ -112,11 +127,13 @@ QSvgImage::QSvgImage(QSvgNode *parent, const QImage &image,
 
 void QSvgImage::draw(QPainter *p, QSvgExtraStates &states)
 {
+    QT_SVG_TIMING_ENTER
     if (shouldDrawNode(p, states)) {
         applyStyle(p, states);
         p->drawImage(m_bounds, m_image);
         revertStyle(p, states);
     }
+    QT_SVG_TIMING_EXIT("Image")
 }
 
 
@@ -128,6 +145,7 @@ QSvgLine::QSvgLine(QSvgNode *parent, const QLineF &line)
 
 void QSvgLine::draw(QPainter *p, QSvgExtraStates &states)
 {
+    QT_SVG_TIMING_ENTER
     applyStyle(p, states);
     if (shouldDrawNode(p, states)) {
         if (p->pen().widthF() != 0) {
@@ -138,6 +156,7 @@ void QSvgLine::draw(QPainter *p, QSvgExtraStates &states)
         }
     }
     revertStyle(p, states);
+    QT_SVG_TIMING_EXIT("Line")
 }
 
 QSvgPath::QSvgPath(QSvgNode *parent, const QPainterPath &qpath)
@@ -147,12 +166,14 @@ QSvgPath::QSvgPath(QSvgNode *parent, const QPainterPath &qpath)
 
 void QSvgPath::draw(QPainter *p, QSvgExtraStates &states)
 {
+    QT_SVG_TIMING_ENTER
     applyStyle(p, states);
     if (shouldDrawNode(p, states)) {
         m_path.setFillRule(states.fillRule);
         QT_SVG_DRAW_SHAPE(p->drawPath(m_path));
     }
     revertStyle(p, states);
+    QT_SVG_TIMING_EXIT("Path")
 }
 
 QRectF QSvgPath::fastBounds(QPainter *p, QSvgExtraStates &) const
@@ -191,10 +212,12 @@ QRectF QSvgPolygon::bounds(QPainter *p, QSvgExtraStates &) const
 
 void QSvgPolygon::draw(QPainter *p, QSvgExtraStates &states)
 {
+    QT_SVG_TIMING_ENTER
     applyStyle(p, states);
     if (shouldDrawNode(p, states))
         QT_SVG_DRAW_SHAPE(p->drawPolygon(m_poly, states.fillRule));
     revertStyle(p, states);
+    QT_SVG_TIMING_EXIT("Polygon")
 }
 
 
@@ -206,6 +229,7 @@ QSvgPolyline::QSvgPolyline(QSvgNode *parent, const QPolygonF &poly)
 
 void QSvgPolyline::draw(QPainter *p, QSvgExtraStates &states)
 {
+    QT_SVG_TIMING_ENTER
     applyStyle(p, states);
     if (shouldDrawNode(p, states)) {
         qreal oldOpacity = p->opacity();
@@ -223,6 +247,7 @@ void QSvgPolyline::draw(QPainter *p, QSvgExtraStates &states)
         p->setOpacity(oldOpacity);
     }
     revertStyle(p, states);
+    QT_SVG_TIMING_EXIT("Polyline")
 }
 
 QSvgRect::QSvgRect(QSvgNode *node, const QRectF &rect, int rx, int ry)
@@ -250,6 +275,7 @@ QRectF QSvgRect::bounds(QPainter *p, QSvgExtraStates &) const
 
 void QSvgRect::draw(QPainter *p, QSvgExtraStates &states)
 {
+    QT_SVG_TIMING_ENTER
     applyStyle(p, states);
     if (shouldDrawNode(p, states)) {
         if (m_rx || m_ry) {
@@ -259,6 +285,7 @@ void QSvgRect::draw(QPainter *p, QSvgExtraStates &states)
         }
     }
     revertStyle(p, states);
+    QT_SVG_TIMING_EXIT("Rect")
 }
 
 QSvgTspan * const QSvgText::LINEBREAK = 0;
@@ -292,8 +319,10 @@ QRectF QSvgText::fastBounds(QPainter *p, QSvgExtraStates &) const
     QFontMetricsF fm(font);
 
     int charCount = 0;
-    for (int i = 0; i < m_tspans.size(); ++i)
-        charCount += m_tspans.at(i)->text().size();
+    for (int i = 0; i < m_tspans.size(); ++i) {
+        if (m_tspans.at(i) != LINEBREAK)
+            charCount += m_tspans.at(i)->text().size();
+    }
 
     QRectF approxMaximumBrect(m_coord.x(),
                               m_coord.y(),
@@ -316,6 +345,9 @@ bool QSvgText::precheck(QPainter *p) const
     qreal originalFontSize = p->font().pointSizeF();
     qreal maxFontSize = originalFontSize;
     for (const QSvgTspan *span : std::as_const(m_tspans)) {
+        if (span == LINEBREAK)
+            continue;
+
         numChars += span->text().size();
 
         QSvgFontStyle *style = static_cast<QSvgFontStyle *>(span->styleProperty(QSvgStyleProperty::FONT));
@@ -341,8 +373,10 @@ bool QSvgText::precheck(QPainter *p) const
 
 void QSvgText::draw(QPainter *p, QSvgExtraStates &states)
 {
+    QT_SVG_TIMING_ENTER
     if (precheck(p))
         draw_helper(p, states);
+    QT_SVG_TIMING_EXIT("Text")
 }
 
 void QSvgText::draw_helper(QPainter *p, QSvgExtraStates &states, QRectF *boundingRect) const
@@ -541,6 +575,7 @@ QSvgUse::QSvgUse(const QPointF &start, QSvgNode *parent, QSvgNode *node)
 
 void QSvgUse::draw(QPainter *p, QSvgExtraStates &states)
 {
+    QT_SVG_TIMING_ENTER
     if (Q_UNLIKELY(!m_link || isDescendantOf(m_link) || m_recursing))
         return;
 
@@ -570,6 +605,7 @@ void QSvgUse::draw(QPainter *p, QSvgExtraStates &states)
     }
 
     revertStyle(p, states);
+    QT_SVG_TIMING_EXIT("Use")
 }
 
 void QSvgVideo::draw(QPainter *p, QSvgExtraStates &states)

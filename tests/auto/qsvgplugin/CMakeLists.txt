@@ -20,6 +20,7 @@ qt_internal_add_test(tst_qsvgplugin
 set(resources_resource_files
     "imageInclude.svg"
     "imageIncludeA.svg"
+    "checkers.png"
     "square.svg"
     "square_size.svg"
     "square_size_viewbox.svg"
@@ -37,6 +38,9 @@ set(resources_resource_files
     "simple_Utf16BE.svg"
     "simple_Utf32LE.svg"
     "simple_Utf32BE.svg"
+    "invalid_xml.svg"
+    "xml_not_svg.svg"
+    "invalid_then_valid.svg"
 )
 
 qt_internal_add_resource(tst_qsvgplugin "resources"

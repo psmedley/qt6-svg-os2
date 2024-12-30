@@ -33,7 +33,6 @@ class QSvgTinyDocument;
 class QSvgHandler;
 class QColor;
 class QSvgStyleSelector;
-class QXmlStreamReader;
 
 #ifndef QT_NO_CSSPARSER
 
@@ -100,6 +99,8 @@ public:
     inline QPen defaultPen() const
     { return m_defaultPen; }
 
+    bool trustedSourceMode() const;
+
 public:
     bool startElement(const QString &localName, const QXmlStreamAttributes &attributes);
     bool endElement(QStringView localName);
@@ -119,7 +120,8 @@ private:
     {
         Unknown,
         Graphics,
-        Style
+        Style,
+        Doc
     };
     QStack<CurrentNode> m_skipNodes;
 
