@@ -10,6 +10,7 @@ qt_internal_add_module(SvgWidgets
         qsvgwidget.cpp qsvgwidget.h
         qtsvgwidgetsglobal.h
     DEFINES
+        QT_NO_CONTEXTLESS_CONNECT
         QT_NO_USING_NAMESPACE
     LIBRARIES
         Qt::CorePrivate
@@ -24,7 +25,6 @@ qt_internal_add_module(SvgWidgets
         Qt::CorePrivate
         Qt::GuiPrivate
         Qt::WidgetsPrivate
-    GENERATE_CPP_EXPORTS
 )
 
 qt_internal_extend_target(SvgWidgets CONDITION QT_FEATURE_graphicsview

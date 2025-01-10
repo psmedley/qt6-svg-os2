@@ -1,5 +1,5 @@
 # Copyright (C) 2022 The Qt Company Ltd.
-# SPDX-License-Identifier: BSD-3-Clause
+# SPDX-License-Identifier: LicenseRef-Qt-Commercial OR BSD-3-Clause
 
 cmake_minimum_required(VERSION 3.16)
 project(fluidlauncher LANGUAGES CXX)
@@ -65,7 +65,6 @@ set(fluidlauncher_resource_files
     "screenshots/spectrum.png"
     "screenshots/styledemo.png"
     "screenshots/styledemo_s60.png"
-    "screenshots/weatherinfo.png"
     "screenshots/wiggly.png"
     "screenshots/wiggly_s60.png"
     "slides/demo_1.png"
