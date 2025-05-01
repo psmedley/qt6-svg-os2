@@ -3761,6 +3761,9 @@ static QSvgNode *createPolygonNode(QSvgNode *parent,
     const QChar *s = pointsStr.constData();
     QList<qreal> points = parseNumbersList(s);
     QPolygonF poly(points.size()/2);
+    if (poly.size() < 2)
+        return nullptr;
+
     for (int i = 0; i < poly.size(); ++i)
         poly[i] = QPointF(points.at(2 * i), points.at(2 * i + 1));
     QSvgNode *polygon = new QSvgPolygon(parent, poly);
@@ -3777,6 +3780,9 @@ static QSvgNode *createPolylineNode(QSvgNode *parent,
     const QChar *s = pointsStr.constData();
     QList<qreal> points = parseNumbersList(s);
     QPolygonF poly(points.size()/2);
+    if (poly.size() < 2)
+        return nullptr;
+
     for (int i = 0; i < poly.size(); ++i)
         poly[i] = QPointF(points.at(2 * i), points.at(2 * i + 1));
 
@@ -4624,6 +4630,13 @@ static bool detectCycles(const QSvgNode *node, QList<const QSvgNode *> active = 
     return false;
 }
 
+static bool detectCyclesAndWarn(const QSvgNode *node) {
+    const bool cycleFound = detectCycles(node);
+    if (cycleFound)
+        qCWarning(lcSvgHandler, "Cycles detected in SVG, document discarded.");
+    return cycleFound;
+}
+
 // Having too many unfinished elements will cause a stack overflow
 // in the dtor of QSvgTinyDocument, see oss-fuzz issue 24000.
 static const int unfinishedElementsLimit = 2048;
@@ -4649,7 +4662,8 @@ void QSvgHandler::parse()
             // this point is to do what everyone else seems to do and
             // ignore the reported namespaceUri completely.
             if (remainingUnfinishedElements
-                    && startElement(xml->name().toString(), xml->attributes())) {
+                    && startElement(xml->name().toString(), xml->attributes())
+                    && !detectCyclesAndWarn(m_doc)) {
                 --remainingUnfinishedElements;
             } else {
                 delete m_doc;
@@ -4673,8 +4687,7 @@ void QSvgHandler::parse()
     }
     resolvePaintServers(m_doc);
     resolveNodes();
-    if (detectCycles(m_doc)) {
-        qCWarning(lcSvgHandler, "Cycles detected in SVG, document discarded.");
+    if (detectCyclesAndWarn(m_doc)) {
         delete m_doc;
         m_doc = nullptr;
     }
