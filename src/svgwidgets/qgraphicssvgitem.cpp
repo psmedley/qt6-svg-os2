@@ -1,5 +1,7 @@
 // Copyright (C) 2020 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:default
+
 #include "qgraphicssvgitem.h"
 
 #if !defined(QT_NO_GRAPHICSVIEW)
@@ -118,6 +120,11 @@ QGraphicsSvgItem::QGraphicsSvgItem(const QString &fileName, QGraphicsItem *paren
     d->init(parent);
     d->renderer->load(fileName);
     d->updateDefaultSize();
+}
+
+QGraphicsSvgItem::~QGraphicsSvgItem()
+{
+    // must be empty until Qt 7 (used to be inline)
 }
 
 /*!

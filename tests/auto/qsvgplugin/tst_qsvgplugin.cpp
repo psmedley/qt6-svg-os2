@@ -2,26 +2,17 @@
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR GPL-3.0-only
 
 
-#include <QtTest/QtTest>
+#include <QtTest/QTest>
 
 #include "../../../src/plugins/imageformats/svg/qsvgiohandler.cpp"
+#include <QFile>
 #include <QImage>
+#include <QString>
 #include <QStringList>
+#include <QSize>
+#include <QVariant>
 
-#ifndef SRCDIR
-#define SRCDIR
-#endif
-
-
-QStringList logMessages;
-
-static void messageHandler(QtMsgType pType, const QMessageLogContext& pContext, const QString& pMsg)
-{
-    Q_UNUSED(pType);
-    Q_UNUSED(pContext);
-    logMessages.append(pMsg);
-}
-
+using namespace Qt::StringLiterals;
 
 class tst_QSvgPlugin : public QObject
 {
@@ -37,17 +28,18 @@ private slots:
     void checkImageInclude();
     void encodings_data();
     void encodings();
+    void animationProperties();
+    void animationFrameReading();
+    void staticSvgNoAnimation();
 };
 
 
 
 tst_QSvgPlugin::tst_QSvgPlugin()
-{
-}
+    = default;
 
 tst_QSvgPlugin::~tst_QSvgPlugin()
-{
-}
+    = default;
 
 void tst_QSvgPlugin::checkSize_data()
 {
@@ -107,6 +99,16 @@ void tst_QSvgPlugin::checkImageInclude()
     const QString filename(QFINDTESTDATA("imageInclude.svg"));
     const QString path = filename.left(filename.size() - strlen("imageInclude.svg"));
 
+    QString msg = uR"(Could not create image from "%1%2notExisting.svg")"_s;
+    QTest::ignoreMessage(QtWarningMsg, msg.arg(path, "").toUtf8().data());
+    QTest::ignoreMessage(QtWarningMsg, msg.arg(path, "./").toUtf8().data());
+    QTest::ignoreMessage(QtWarningMsg, msg.arg(path, "../").toUtf8().data());
+    QTest::ignoreMessage(QtWarningMsg, msg.arg(QDir::rootPath(), "").toUtf8().data());
+    QTest::ignoreMessage(QtWarningMsg, msg.arg(":/", "").toUtf8().data());
+    QTest::ignoreMessage(QtWarningMsg, msg.arg("qrc:///", "").toUtf8().data());
+    QTest::ignoreMessage(QtWarningMsg, msg.arg("file:///", "").toUtf8().data());
+    QTest::ignoreMessage(QtWarningMsg, msg.arg("http://qt.io/", "").toUtf8().data());
+
     QFile file(filename);
     QVERIFY(file.open(QIODevice::ReadOnly));
 
@@ -114,23 +116,9 @@ void tst_QSvgPlugin::checkImageInclude()
     plugin.setDevice(&file);
 
     QImage image;
-    qInstallMessageHandler(messageHandler);
     plugin.read(&image);
-    qInstallMessageHandler(nullptr);
 
     file.close();
-
-    QCOMPARE(logMessages.size(), 8);
-    QCOMPARE(logMessages.at(0), QString("Could not create image from \"%1notExisting.svg\"").arg(path));
-    QCOMPARE(logMessages.at(1), QString("Could not create image from \"%1./notExisting.svg\"").arg(path));
-    QCOMPARE(logMessages.at(2), QString("Could not create image from \"%1../notExisting.svg\"").arg(path));
-    QCOMPARE(logMessages.at(3), QString("Could not create image from \"%1notExisting.svg\"").arg(QDir::rootPath()));
-    QCOMPARE(logMessages.at(4), QLatin1String("Could not create image from \":/notExisting.svg\""));
-    QCOMPARE(logMessages.at(5), QLatin1String("Could not create image from \"qrc:///notExisting.svg\""));
-    QCOMPARE(logMessages.at(6), QLatin1String("Could not create image from \"file:///notExisting.svg\""));
-    QCOMPARE(logMessages.at(7), QLatin1String("Could not create image from \"http://qt.io/notExisting.svg\""));
-
-    logMessages.clear();
 }
 
 void tst_QSvgPlugin::encodings_data()
@@ -164,6 +152,104 @@ void tst_QSvgPlugin::encodings()
     QImage img;
     QVERIFY(plugin.read(&img));
     QCOMPARE(img.size(), QSize(50, 50));
+}
+
+void tst_QSvgPlugin::animationProperties()
+{
+    const QString path = QFINDTESTDATA("animated.svg");
+
+    // Each lambda gets a fresh handler to ensure that the result of
+    // each getter does not depend on previous calls.
+    auto withHandler = [&](auto callback) {
+        if (QTest::currentTestFailed())
+            return;
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::ReadOnly));
+        QSvgIOHandler handler;
+        handler.setDevice(&file);
+        callback(handler);
+    };
+
+    withHandler([](QSvgIOHandler &h) { QVERIFY(h.supportsOption(QImageIOHandler::Animation)); });
+    withHandler([](QSvgIOHandler &h) { QCOMPARE(h.option(QImageIOHandler::Animation).toBool(), true); });
+    withHandler([](QSvgIOHandler &h) { QVERIFY(h.imageCount() > 1); });
+    withHandler([](QSvgIOHandler &h) { QVERIFY(h.nextImageDelay() > 0); });
+    withHandler([](QSvgIOHandler &h) { QCOMPARE(h.loopCount(), 0); });
+    withHandler([](QSvgIOHandler &h) { QCOMPARE(h.currentImageNumber(), -1); });
+}
+
+void tst_QSvgPlugin::animationFrameReading()
+{
+    QFile file(QFINDTESTDATA("animated.svg"));
+    QVERIFY(file.open(QIODevice::ReadOnly));
+
+    QSvgIOHandler handler;
+    handler.setDevice(&file);
+
+    // Read first frame
+    QImage frame;
+    QVERIFY(handler.canRead());
+    QVERIFY(handler.read(&frame));
+    QCOMPARE(frame.size(), QSize(100, 100));
+    QCOMPARE(handler.currentImageNumber(), 0);
+
+    // Read all remaining frames sequentially
+    const int total = handler.imageCount();
+    int framesRead = 1;
+    while (handler.canRead() && handler.read(&frame))
+        ++framesRead;
+    QCOMPARE(framesRead, total);
+    QCOMPARE(handler.currentImageNumber(), total - 1);
+
+    // jumpToImage should work
+    QVERIFY(handler.jumpToImage(0));
+    QVERIFY(handler.read(&frame));
+    QCOMPARE(frame.size(), QSize(100, 100));
+    QCOMPARE(handler.currentImageNumber(), 0);
+
+    // jumpToImage out of range should fail
+    QVERIFY(!handler.jumpToImage(-1));
+    QVERIFY(!handler.jumpToImage(total));
+
+    // jumpToNextImage should work
+    QVERIFY(handler.jumpToImage(0));
+    QVERIFY(handler.jumpToNextImage());
+    QVERIFY(handler.read(&frame));
+    QCOMPARE(handler.currentImageNumber(), 1);
+
+    // canRead should return false after exhausting all frames
+    QVERIFY(handler.jumpToImage(total - 1));
+    QVERIFY(handler.read(&frame));
+    QCOMPARE(handler.currentImageNumber(), total - 1);
+    QVERIFY(!handler.canRead());
+    QVERIFY(!handler.read(&frame));
+}
+
+void tst_QSvgPlugin::staticSvgNoAnimation()
+{
+    QFile file(QFINDTESTDATA("square.svg"));
+    QVERIFY(file.open(QIODevice::ReadOnly));
+
+    QSvgIOHandler handler;
+    handler.setDevice(&file);
+
+    QCOMPARE(handler.option(QImageIOHandler::Animation).toBool(), false);
+    QCOMPARE(handler.imageCount(), 1);
+    QCOMPARE(handler.nextImageDelay(), 0);
+    QCOMPARE(handler.loopCount(), 0);
+    QCOMPARE(handler.currentImageNumber(), 0);
+
+    QImage image;
+    QVERIFY(handler.read(&image));
+    QCOMPARE(handler.currentImageNumber(), 0);
+    QCOMPARE(image.size(), QSize(50, 50));
+
+    // Second read should fail for static SVG
+    QVERIFY(!handler.read(&image));
+
+    // Jump operations should fail for static SVG
+    QVERIFY(!handler.jumpToImage(0));
+    QVERIFY(!handler.jumpToNextImage());
 }
 
 QTEST_MAIN(tst_QSvgPlugin)

@@ -23,11 +23,18 @@ qt_internal_add_module(Svg
         qsvgstructure.cpp qsvgstructure_p.h
         qsvgfilter.cpp qsvgfilter_p.h
         qsvgstyle.cpp qsvgstyle_p.h
-        qsvgtinydocument.cpp qsvgtinydocument_p.h
+        qsvgpaintserver.cpp qsvgpaintserver_p.h
+        qsvgdocument.cpp qsvgdocument_p.h
+        qsvganimate.cpp qsvganimate_p.h
         qsvghelper_p.h
         qsvgdebug.cpp
         qsvgvisitor.cpp qsvgvisitor_p.h
         qtsvgglobal.h qtsvgglobal_p.h
+        animation/qsvganimator.cpp animation/qsvganimator_p.h
+        animation/qsvgabstractanimation.cpp animation/qsvgabstractanimation_p.h
+        animation/qsvgeasinginterface.cpp animation/qsvgeasinginterface_p.h
+        animation/qsvganimatedproperty.cpp animation/qsvganimatedproperty_p.h
+        animation/qsvgcssanimation.cpp animation/qsvgcssanimation_p.h
     DEFINES
         QT_NO_CONTEXTLESS_CONNECT
         QT_NO_USING_NAMESPACE
@@ -44,6 +51,15 @@ qt_internal_add_module(Svg
 
 ## Scopes:
 #####################################################################
+
+qt_internal_extend_target(Svg CONDITION QT_FEATURE_cssparser
+    SOURCES
+        css/qsvgcsshandler.cpp css/qsvgcsshandler_p.h
+        css/qsvgstyleselector.cpp css/qsvgstyleselector_p.h
+        css/qsvgcssproperties.cpp css/qsvgcssproperties_p.h
+        css/animation/qsvgcsseasing.cpp css/animation/qsvgcsseasing_p.h
+        css/util/qsvgcssvalues_p.h
+)
 
 qt_internal_extend_target(Svg CONDITION MSVC AND (TEST_architecture_arch STREQUAL "i386")
     LINK_OPTIONS

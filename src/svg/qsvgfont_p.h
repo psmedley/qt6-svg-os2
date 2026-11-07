@@ -1,5 +1,7 @@
 // Copyright (C) 2016 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:default
+
 
 #ifndef QSVGFONT_P_H
 #define QSVGFONT_P_H
@@ -15,54 +17,72 @@
 // We mean it.
 //
 
+#include <QtCore/qhash.h>
 #include "qpainterpath.h"
-#include "qhash.h"
+#include "qlist.h"
 #include "qstring.h"
-#include "qsvgstyle_p.h"
-#include "qtsvgglobal_p.h"
+
+#include <QtSvg/private/qsvgnode_p.h>
+
+#include <memory>
 
 QT_BEGIN_NAMESPACE
 
 class Q_SVG_EXPORT QSvgGlyph
 {
 public:
-    QSvgGlyph(QChar unicode, const QPainterPath &path, qreal horizAdvX);
-    QSvgGlyph() : m_unicode(0), m_horizAdvX(0) {}
+    QSvgGlyph(const QString &unicode, const QPainterPath &path, qreal horizAdvX);
+    QSvgGlyph() : m_horizAdvX(0) {}
 
-    QChar m_unicode;
+    QString m_unicode;
     QPainterPath m_path;
     qreal m_horizAdvX;
 };
 
 
-class Q_SVG_EXPORT QSvgFont : public QSvgRefCounted
+class Q_SVG_EXPORT QSvgFont : public QSvgNode
 {
 public:
-    static constexpr qreal DEFAULT_UNITS_PER_EM = 1000;
     QSvgFont(qreal horizAdvX);
+    ~QSvgFont() override;
 
-    void setFamilyName(const QString &name);
-    QString familyName() const;
-
+    Type type() const override { return Font; }
     void setUnitsPerEm(qreal upem);
 
-    void addGlyph(QChar unicode, const QPainterPath &path, qreal horizAdvX = -1);
+    void addGlyph(const QString &unicode, const QPainterPath &path, qreal horizAdvX = -1);
+    bool addMissingGlyph(const QPainterPath &path, qreal horizAdvX);
 
-    void draw(QPainter *p, const QPointF &point, const QString &str,
+    void drawCommand(QPainter *, QSvgExtraStates &) override {};
+    void draw(QPainter *p, const QPointF &point, const QList<const QSvgGlyph *> &glyphs,
               qreal pixelSize, Qt::Alignment alignment) const;
-    QRectF boundingRect(QPainter *p, const QPointF &point, const QString &str,
+    QRectF boundingRect(QPainter *p, const QPointF &point, const QList<const QSvgGlyph *> &glyphs,
                         qreal pixelSize, Qt::Alignment alignment) const;
+    const QSvgGlyph *findFirstGlyphFor(QStringView text) const;
+    QList<const QSvgGlyph *> toGlyphs(QStringView text) const;
 
 public:
-    QString m_familyName;
-    qreal m_unitsPerEm = DEFAULT_UNITS_PER_EM;
+    qreal m_unitsPerEm{1000};
     qreal m_horizAdvX;
-    QHash<QChar, QSvgGlyph> m_glyphs;
 
 private:
-    void draw_helper(QPainter *p, const QPointF &point, const QString &str, qreal pixelSize,
+    // not about a missing <glyph> element, but the font's <missing-glyph> element:
+    std::unique_ptr<const QSvgGlyph> m_missingGlyph;
+    // The following needs to preserve the order of glyphs because
+    // "17.6 Glyph selection rules" in SVG Tiny 1.2 reads:
+    // "the 'font' element must be searched from its first
+    // 'glyph' element to its last in logical order"
+    QList<QSvgGlyph> m_glyphs;
+
+    // to speed up finding glyphs
+    mutable QHash<char32_t, QList<qsizetype>> m_possibleGlyphIndicesForChar;
+    mutable qsizetype m_firstUnscannedGlyphIdx = 0;
+
+    void draw_helper(QPainter *p, const QPointF &point,
+                     const QList<const QSvgGlyph *> &glyphs, qreal pixelSize,
                      Qt::Alignment alignment, QRectF *boundingRect = nullptr) const;
 };
+
+using QSvgFontPtr = std::unique_ptr<QSvgFont>;
 
 QT_END_NAMESPACE
 

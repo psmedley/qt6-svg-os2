@@ -2,11 +2,20 @@
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR GPL-3.0-only
 
 
-#include <QtTest/QtTest>
+#include <QtTest/QTest>
 
+#include <QBuffer>
+#include <QByteArray>
+#include <QDir>
+#include <QTemporaryDir>
 #include <QDomDocument>
 #include <QDomElement>
 #include <QDomNode>
+#include <QFile>
+#include <QFont>
+#include <QLinearGradient>
+#include <QPainterPath>
+#include <QRadialGradient>
 
 #include <qguiapplication.h>
 #include <qdebug.h>
@@ -23,6 +32,7 @@ public:
     virtual ~tst_QSvgGenerator();
 
 private slots:
+    void initTestCase();
     void construction();
     void fileName();
     void escapesTitle();
@@ -36,6 +46,13 @@ private slots:
     void titleAndDescription();
     void gradientInterpolation();
     void patternBrush();
+    void assertOnCurveToElement();
+
+private:
+    // The generated .svg files are written to the current working directory,
+    // which is not writable on all platforms (e.g. VxWorks). Redirect the
+    // working directory to a temporary one for the duration of the test.
+    QTemporaryDir m_tempDir;
 };
 
 tst_QSvgGenerator::tst_QSvgGenerator()
@@ -44,9 +61,12 @@ tst_QSvgGenerator::tst_QSvgGenerator()
 
 tst_QSvgGenerator::~tst_QSvgGenerator()
 {
-    QFile::remove(QLatin1String("fileName_output.svg"));
-    QFile::remove(QLatin1String("outputDevice_output.svg"));
-    QFile::remove(QLatin1String("radial_gradient.svg"));
+}
+
+void tst_QSvgGenerator::initTestCase()
+{
+    QVERIFY2(m_tempDir.isValid(), qPrintable(m_tempDir.errorString()));
+    QVERIFY(QDir::setCurrent(m_tempDir.path()));
 }
 
 void tst_QSvgGenerator::construction()
@@ -183,7 +203,9 @@ void tst_QSvgGenerator::escapesDescription()
 
 void tst_QSvgGenerator::outputDevice()
 {
-    QString fileName = "outputDevice_output.svg";
+    const QString fileName = "outputDevice_output.svg";
+    const QByteArray notOpenWarning =
+            QString("QIODevice::write (QFile, \"%1\"): device not open").arg(fileName).toLatin1();
     QFile::remove(fileName);
 
     QFile file(fileName);
@@ -195,6 +217,7 @@ void tst_QSvgGenerator::outputDevice()
         QCOMPARE(generator.outputDevice(), (QIODevice *)&file);
 
         QPainter painter;
+        QTest::ignoreMessage(QtWarningMsg, notOpenWarning.constData());
         QVERIFY(painter.begin(&generator));
         QCOMPARE(file.openMode(), QIODevice::OpenMode(QIODevice::Text | QIODevice::WriteOnly));
         file.close();
@@ -208,6 +231,7 @@ void tst_QSvgGenerator::outputDevice()
         QCOMPARE(generator.outputDevice(), (QIODevice *)&file);
 
         QPainter painter;
+        QTest::ignoreMessage(QtWarningMsg, notOpenWarning.constData());
         QVERIFY(painter.begin(&generator));
         QCOMPARE(file.openMode(), QIODevice::OpenMode(QIODevice::WriteOnly));
         file.close();
@@ -222,6 +246,7 @@ void tst_QSvgGenerator::outputDevice()
 
         QPainter painter;
         QTest::ignoreMessage(QtWarningMsg, "QSvgPaintEngine::begin(), could not write to read-only output device: 'Unknown error'");
+        QTest::ignoreMessage(QtWarningMsg, "QPainter::begin(): Returned false");
         QVERIFY(!painter.begin(&generator));
         QCOMPARE(file.openMode(), QIODevice::OpenMode(QIODevice::ReadOnly));
         file.close();
@@ -498,6 +523,25 @@ void tst_QSvgGenerator::patternBrush()
         QVERIFY(byteArray.count("<g fill=\"url(#fillpattern") >= 4);
     }
 
+}
+
+void tst_QSvgGenerator::assertOnCurveToElement()
+{
+    // QTBUG-145372
+    // Tried to access QPainterPath beyond its size when closing path, needs enabled asserts
+    QByteArray byteArray;
+    QBuffer buffer(&byteArray);
+    QSvgGenerator svg;
+    svg.setOutputDevice(&buffer);
+    QPainter painter(&svg);
+    QPainterPath path;
+    path.moveTo(100, 0);
+    path.cubicTo(100, 55, 55, 100, 0, 100);
+    path.cubicTo(55, -100, 100, -55, 100, 0);
+    painter.drawPath(path);
+    painter.end();
+    // Validate that path is still closed correctly
+    QVERIFY(byteArray.contains("M100,0 C100,55 55,100 0,100 C55,-100 100,-55 100,0 Z"));
 }
 
 QTEST_MAIN(tst_QSvgGenerator)

@@ -1,53 +1,25 @@
 // Copyright (C) 2023 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:default
+
 
 #include "qsvgvisitor_p.h"
+
 #include <QDebug>
 
 QT_BEGIN_NAMESPACE
-
-static const char *nodeTypeStrings[] = {
-    "DOC",
-    "G",
-    "DEFS",
-    "SWITCH",
-    "ANIMATION",
-    "ARC",
-    "CIRCLE",
-    "ELLIPSE",
-    "IMAGE",
-    "LINE",
-    "PATH",
-    "POLYGON",
-    "POLYLINE",
-    "RECT",
-    "TEXT",
-    "TEXTAREA",
-    "TSPAN",
-    "USE",
-    "VIDEO"
-};
-
-// TODO: something like this is needed in several places. Make a common version.
-static const char *typeName(const QSvgNode *node)
-{
-    constexpr int typeNameCount = sizeof(nodeTypeStrings) / sizeof(const char *);
-    if (node->type() < typeNameCount)
-        return nodeTypeStrings[node->type()];
-    return "UNKNOWN";
-}
 
 class SvgDebugVisitor : public QSvgVisitor
 {
 public:
     SvgDebugVisitor(QDebug &stream) : debug(stream) {}
-    void write(const QSvgTinyDocument *doc);
+    void write(const QSvgDocument *doc);
 
 protected:
     void visitNode(const QSvgNode *) override;
     bool visitStructureNodeStart(const QSvgStructureNode *node) override;
     void visitStructureNodeEnd(const QSvgStructureNode *) override;
-    void visitAnimationNode(const QSvgAnimation *node) override;
+    void visitAnimateNode(const QSvgAnimateNode *node) override;
     void visitEllipseNode(const QSvgEllipse *node) override;
     void visitImageNode(const QSvgImage *node) override;
     void visitLineNode(const QSvgLine *node) override;
@@ -70,7 +42,7 @@ private:
 
 void SvgDebugVisitor::handleBaseNode(const QSvgNode *node)
 {
-    debug << indent() << typeName(node) << "node, ID:" << node->nodeId();
+    debug << indent() << node->typeName() << "node, ID:" << node->nodeId();
     nodeCounter++;
 }
 
@@ -82,7 +54,7 @@ void SvgDebugVisitor::visitNode(const QSvgNode *node)
 
 bool SvgDebugVisitor::visitStructureNodeStart(const QSvgStructureNode *node)
 {
-    debug << indent() << "START node" << node->nodeId() << "type" << typeName(node) << node->type() << Qt::endl;
+    debug << indent() << "START node" << node->nodeId() << "type" << node->typeName() << node->type() << Qt::endl;
     m_indentLevel++;
     return true;
 }
@@ -93,7 +65,7 @@ void SvgDebugVisitor::visitStructureNodeEnd(const QSvgStructureNode *node)
     debug << indent() << "END node" << node->nodeId() << Qt::endl;
 }
 
-void SvgDebugVisitor::visitAnimationNode(const QSvgAnimation *node)
+void SvgDebugVisitor::visitAnimateNode(const QSvgAnimateNode *node)
 {
     handleBaseNode(node);
     debug << Qt::endl;
@@ -166,7 +138,7 @@ void SvgDebugVisitor::visitVideoNode(const QSvgVideo *node)
     debug << Qt::endl;
 }
 
-void SvgDebugVisitor::write(const QSvgTinyDocument *doc)
+void SvgDebugVisitor::write(const QSvgDocument *doc)
 {
     debug << "SVG" << doc->size() << "viewBox" << doc->viewBox() << Qt::endl;
     traverse(doc);
@@ -174,7 +146,7 @@ void SvgDebugVisitor::write(const QSvgTinyDocument *doc)
     debug << "END SVG" << nodeCounter << "nodes";
 }
 
-QDebug operator<<(QDebug debug, const QSvgTinyDocument &doc)
+QDebug operator<<(QDebug debug, const QSvgDocument &doc)
 {
     SvgDebugVisitor visitor(debug);
     visitor.write(&doc);

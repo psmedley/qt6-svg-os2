@@ -1,5 +1,7 @@
 // Copyright (C) 2023 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:default
+
 
 #ifndef QSVGFILTER_P_H
 #define QSVGFILTER_P_H
@@ -20,8 +22,6 @@
 #include "qsvgstructure_p.h"
 #include "qgenericmatrix.h"
 
-#include "QtCore/qlist.h"
-#include "QtCore/qhash.h"
 #include "QtGui/qvector4d.h"
 
 QT_BEGIN_NAMESPACE
@@ -29,7 +29,10 @@ QT_BEGIN_NAMESPACE
 class Q_SVG_EXPORT QSvgFeFilterPrimitive : public QSvgStructureNode
 {
 public:
-    QSvgFeFilterPrimitive(QSvgNode *parent, QString input, QString result, const QSvgRectF &rect);
+    QSvgFeFilterPrimitive(QSvgNode *parent, const QString &input,
+                          const QString &result, const QSvgRectF &rect);
+    ~QSvgFeFilterPrimitive() override;
+
     void drawCommand(QPainter *, QSvgExtraStates &) override {};
     bool shouldDrawNode(QPainter *, QSvgExtraStates &) const override;
     QRectF internalFastBounds(QPainter *, QSvgExtraStates &) const override { return QRectF(); }
@@ -44,12 +47,9 @@ public:
                          QPainter *p, const QRectF &itemBounds, const QRectF &filterBounds,
                          QtSvg::UnitTypes primitiveUnits, QtSvg::UnitTypes filterUnits) const = 0;
     virtual bool requiresSourceAlpha() const;
-    QString input() const {
-        return m_input;
-    }
-    QString result() const {
-        return m_result;
-    }
+    QString input() const { return m_input; }
+    QString result() const { return m_result; }
+    QSvgRectF rect() const { return m_rect; }
 
     static const QSvgFeFilterPrimitive *castToFilterPrimitive(const QSvgNode *node);
 
@@ -57,8 +57,6 @@ protected:
     QString m_input;
     QString m_result;
     QSvgRectF m_rect;
-
-
 };
 
 class Q_SVG_EXPORT QSvgFeColorMatrix : public QSvgFeFilterPrimitive
@@ -74,14 +72,20 @@ public:
     typedef QGenericMatrix<5, 5, qreal> Matrix;
     typedef QGenericMatrix<5, 1, qreal> Vector;
 
-    QSvgFeColorMatrix(QSvgNode *parent, QString input, QString result, const QSvgRectF &rect,
-                      ColorShiftType type, Matrix matrix);
+    QSvgFeColorMatrix(QSvgNode *parent, const QString &input, const QString &result,
+                      const QSvgRectF &rect, ColorShiftType type, const Matrix &matrix);
+    ~QSvgFeColorMatrix() override;
+
     Type type() const override;
     QImage apply(const QMap<QString, QImage> &sources,
                  QPainter *p, const QRectF &itemBounds, const QRectF &filterBounds,
                  QtSvg::UnitTypes primitiveUnits, QtSvg::UnitTypes filterUnits) const override;
+    Matrix matrix() const
+    {
+        return m_matrix;
+    }
+
 private:
-    ColorShiftType m_type;
     Matrix m_matrix;
 };
 
@@ -94,27 +98,41 @@ public:
         None
     };
 
-    QSvgFeGaussianBlur(QSvgNode *parent, QString input, QString result, const QSvgRectF &rect,
-                       qreal stdDeviationX, qreal stdDeviationY, EdgeMode edgemode);
+    QSvgFeGaussianBlur(QSvgNode *parent, const QString &input, const QString &result,
+                       const QSvgRectF &rect, qreal stdDeviationX, qreal stdDeviationY,
+                       EdgeMode edgemode);
+    ~QSvgFeGaussianBlur() override;
+
     Type type() const override;
     QImage apply(const QMap<QString, QImage> &sources,
                  QPainter *p, const QRectF &itemBounds, const QRectF &filterBounds,
                  QtSvg::UnitTypes primitiveUnits, QtSvg::UnitTypes filterUnits) const override;
+
+    qreal stdDeviationX() const { return m_stdDeviationX; }
+    qreal stdDeviationY() const { return m_stdDeviationY; }
+    EdgeMode edgeMode() const { return m_edgemode; }
+
 private:
     qreal m_stdDeviationX;
     qreal m_stdDeviationY;
-    EdgeMode m_edgemode;
+    EdgeMode m_edgemode; // TODO: Unused. Start using it when there's a reference implementation.
 };
 
 class Q_SVG_EXPORT QSvgFeOffset : public QSvgFeFilterPrimitive
 {
 public:
-    QSvgFeOffset(QSvgNode *parent, QString input, QString result, const QSvgRectF &rect,
-                 qreal dx, qreal dy);
+    QSvgFeOffset(QSvgNode *parent, const QString &input, const QString &result,
+                 const QSvgRectF &rect, qreal dx, qreal dy);
+    ~QSvgFeOffset() override;
+
     Type type() const override;
     QImage apply(const QMap<QString, QImage> &sources,
                  QPainter *p, const QRectF &itemBounds, const QRectF &filterBounds,
                  QtSvg::UnitTypes primitiveUnits, QtSvg::UnitTypes filterUnits) const override;
+
+    qreal dx() const { return m_dx; }
+    qreal dy() const { return m_dy; }
+
 private:
     qreal m_dx;
     qreal m_dy;
@@ -123,7 +141,10 @@ private:
 class Q_SVG_EXPORT QSvgFeMerge : public QSvgFeFilterPrimitive
 {
 public:
-    QSvgFeMerge(QSvgNode *parent, QString input, QString result, const QSvgRectF &rect);
+    QSvgFeMerge(QSvgNode *parent, const QString &input,
+                const QString &result, const QSvgRectF &rect);
+    ~QSvgFeMerge() override;
+
     Type type() const override;
     QImage apply(const QMap<QString, QImage> &sources,
                  QPainter *p, const QRectF &itemBounds, const QRectF &filterBounds,
@@ -134,7 +155,10 @@ public:
 class Q_SVG_EXPORT QSvgFeMergeNode : public QSvgFeFilterPrimitive
 {
 public:
-    QSvgFeMergeNode(QSvgNode *parent, QString input, QString result, const QSvgRectF &rect);
+    QSvgFeMergeNode(QSvgNode *parent, const QString &input,
+                    const QString &result, const QSvgRectF &rect);
+    ~QSvgFeMergeNode() override;
+
     Type type() const override;
     QImage apply(const QMap<QString, QImage> &sources,
                  QPainter *p, const QRectF &itemBounds, const QRectF &filterBounds,
@@ -153,13 +177,20 @@ public:
         Lighter,
         Arithmetic
     };
-    QSvgFeComposite(QSvgNode *parent, QString input, QString result, const QSvgRectF &rect,
-                    QString input2, Operator op, QVector4D k);
+    QSvgFeComposite(QSvgNode *parent, const QString &input, const QString &result,
+                    const QSvgRectF &rect, const QString &input2, Operator op, const QVector4D &k);
+    ~QSvgFeComposite() override;
+
     Type type() const override;
     QImage apply(const QMap<QString, QImage> &sources,
                  QPainter *p, const QRectF &itemBounds, const QRectF &filterBounds,
                  QtSvg::UnitTypes primitiveUnits, QtSvg::UnitTypes filterUnits) const override;
     bool requiresSourceAlpha() const override;
+
+    QString input2() const { return m_input2; }
+    Operator compositionOperator() const { return m_operator; }
+    QVector4D k() const { return m_k; }
+
 private:
     QString m_input2;
     Operator m_operator;
@@ -169,19 +200,56 @@ private:
 class Q_SVG_EXPORT QSvgFeFlood : public QSvgFeFilterPrimitive
 {
 public:
-    QSvgFeFlood(QSvgNode *parent, QString input, QString result, const QSvgRectF &rect, const QColor &color);
+    QSvgFeFlood(QSvgNode *parent, const QString &input, const QString &result,
+                const QSvgRectF &rect, const QColor &color);
+    ~QSvgFeFlood() override;
+
     Type type() const override;
     QImage apply(const QMap<QString, QImage> &sources,
                  QPainter *p, const QRectF &itemBounds, const QRectF &filterBounds,
                  QtSvg::UnitTypes primitiveUnits, QtSvg::UnitTypes filterUnits) const override;
+
+    QColor color() const { return m_color; }
 private:
     QColor m_color;
+};
+
+class Q_SVG_EXPORT QSvgFeBlend : public QSvgFeFilterPrimitive
+{
+public:
+    enum class Mode : quint8 {
+        Normal,
+        Multiply,
+        Screen,
+        Darken,
+        Lighten
+    };
+    QSvgFeBlend(QSvgNode *parent, const QString &input, const QString &result,
+                const QSvgRectF &rect, const QString &input2, Mode mode);
+    ~QSvgFeBlend() override;
+
+    Type type() const override;
+    QImage apply(const QMap<QString, QImage> &sources,
+                 QPainter *p, const QRectF &itemBounds, const QRectF &filterBounds,
+                 QtSvg::UnitTypes primitiveUnits, QtSvg::UnitTypes filterUnits) const override;
+    bool requiresSourceAlpha() const override;
+
+    QString input2() const { return m_input2; }
+    Mode mode() const { return m_mode; }
+
+private:
+    QString m_input2;
+    Mode m_mode;
+
 };
 
 class Q_SVG_EXPORT QSvgFeUnsupported : public QSvgFeFilterPrimitive
 {
 public:
-    QSvgFeUnsupported(QSvgNode *parent, QString input, QString result, const QSvgRectF &rect);
+    QSvgFeUnsupported(QSvgNode *parent, const QString &input,
+                      const QString &result, const QSvgRectF &rect);
+    ~QSvgFeUnsupported() override;
+
     Type type() const override;
     QImage apply(const QMap<QString, QImage> &sources,
                  QPainter *p, const QRectF &itemBounds, const QRectF &filterBounds,

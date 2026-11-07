@@ -1,11 +1,13 @@
 // Copyright (C) 2016 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:default
+
 
 #include "qsvgstructure_p.h"
 #include "qsvggraphics_p.h"
 
 #include "qsvgstyle_p.h"
-#include "qsvgtinydocument_p.h"
+#include "qsvgdocument_p.h"
 #include "qsvggraphics_p.h"
 #include "qsvgstyle_p.h"
 #include "qsvgfilter_p.h"
@@ -18,9 +20,13 @@
 #include <qscopedvaluerollback.h>
 #include <QtGui/qimageiohandler.h>
 
+#include <QtCore/qlatin1stringview.h>
+#include <QtCore/qstringview.h>
+#include <QtCore/private/qoffsetstringarray_p.h>
+
 QT_BEGIN_NAMESPACE
 
-Q_DECLARE_LOGGING_CATEGORY(lcSvgDraw);
+using namespace Qt::StringLiterals;
 
 QSvgG::QSvgG(QSvgNode *parent)
     : QSvgStructureNode(parent)
@@ -28,19 +34,14 @@ QSvgG::QSvgG(QSvgNode *parent)
 
 }
 
-QSvgStructureNode::~QSvgStructureNode()
-{
-    qDeleteAll(m_renderers);
-}
+QSvgG::~QSvgG()
+    = default;
 
 void QSvgG::drawCommand(QPainter *p, QSvgExtraStates &states)
 {
-    QList<QSvgNode*>::iterator itr = m_renderers.begin();
-    while (itr != m_renderers.end()) {
-        QSvgNode *node = *itr;
+    for (const auto &node : renderers()) {
         if ((node->isVisible()) && (node->displayMode() != QSvgNode::NoneMode))
             node->draw(p, states);
-        ++itr;
     }
 }
 
@@ -56,7 +57,7 @@ QSvgNode::Type QSvgG::type() const
 
 bool QSvgG::requiresGroupRendering() const
 {
-    return m_renderers.count() > 1;
+    return m_renderers.size() > 1;
 }
 
 QSvgStructureNode::QSvgStructureNode(QSvgNode *parent)
@@ -65,28 +66,25 @@ QSvgStructureNode::QSvgStructureNode(QSvgNode *parent)
 
 }
 
-QSvgNode * QSvgStructureNode::scopeNode(const QString &id) const
+QSvgStructureNode::~QSvgStructureNode()
+    = default;
+
+void QSvgStructureNode::addChild(QSvgDocument *doc, std::unique_ptr<QSvgNode> child,
+                                 const QString &id)
 {
-    QSvgTinyDocument *doc = document();
-    return doc ? doc->namedNode(id) : 0;
-}
+    if (!id.isEmpty())
+        doc->addNamedNode(id, child.get());
 
-void QSvgStructureNode::addChild(QSvgNode *child, const QString &id)
-{
-    m_renderers.append(child);
-
-    if (id.isEmpty())
-        return; //we can't add it to scope without id
-
-    QSvgTinyDocument *doc = document();
-    if (doc)
-        doc->addNamedNode(id, child);
+    m_renderers.push_back(std::move(child));
 }
 
 QSvgDefs::QSvgDefs(QSvgNode *parent)
     : QSvgStructureNode(parent)
 {
 }
+
+QSvgDefs::~QSvgDefs()
+    = default;
 
 bool QSvgDefs::shouldDrawNode(QPainter *, QSvgExtraStates &) const
 {
@@ -110,6 +108,9 @@ QSvgSymbolLike::QSvgSymbolLike(QSvgNode *parent, QRectF bounds, QRectF viewBox, 
 
 }
 
+QSvgSymbolLike::~QSvgSymbolLike()
+    = default;
+
 QRectF QSvgSymbolLike::decoratedInternalBounds(QPainter *p, QSvgExtraStates &states) const
 {
     p->save();
@@ -121,30 +122,42 @@ QRectF QSvgSymbolLike::decoratedInternalBounds(QPainter *p, QSvgExtraStates &sta
 
 bool QSvgSymbolLike::requiresGroupRendering() const
 {
-    return m_renderers.count() > 1;
+    return m_renderers.size() > 1;
 }
 
-void QSvgSymbolLike::setPainterToRectAndAdjustment(QPainter *p) const
+QRectF QSvgSymbolLike::clipRect() const
 {
-    qreal scaleX = 1;
+    if (m_overflow != Overflow::Hidden || !m_viewBox.isValid())
+        return QRectF{};
+
+    qreal scaleX = 1.0;
     if (m_rect.width() > 0 && m_viewBox.width() > 0)
-        scaleX = m_rect.width()/m_viewBox.width();
-    qreal scaleY = 1;
+        scaleX = m_rect.width() / m_viewBox.width();
+    qreal scaleY = 1.0;
     if (m_rect.height() > 0 && m_viewBox.height() > 0)
-        scaleY = m_rect.height()/m_viewBox.height();
+        scaleY = m_rect.height() / m_viewBox.height();
 
-    if (m_overflow == Overflow::Hidden) {
-        QTransform t;
-        t.translate(- m_refP.x() * scaleX - m_rect.left() - m_viewBox.left() * scaleX,
-                    - m_refP.y() * scaleY - m_rect.top() - m_viewBox.top() * scaleY);
-        t.scale(scaleX, scaleY);
+    QTransform t;
+    t.translate(- m_refP.x() * scaleX - m_rect.left() - m_viewBox.left() * scaleX,
+                - m_refP.y() * scaleY - m_rect.top() - m_viewBox.top() * scaleY);
+    t.scale(scaleX, scaleY);
 
-        if (m_viewBox.isValid())
-            p->setClipRect(t.mapRect(m_viewBox));
-    }
+    return t.mapRect(m_viewBox);
+}
 
-    qreal offsetX = 0;
-    qreal offsetY = 0;
+QTransform QSvgSymbolLike::aspectRatioTransform() const
+{
+    QTransform xform;
+
+    qreal offsetX = 0.0;
+    qreal offsetY = 0.0;
+
+    qreal scaleX = 1.0;
+    if (m_rect.width() > 0 && m_viewBox.width() > 0)
+        scaleX = m_rect.width() / m_viewBox.width();
+    qreal scaleY = 1.0;
+    if (m_rect.height() > 0 && m_viewBox.height() > 0)
+        scaleY = m_rect.height() / m_viewBox.height();
 
     if (!qFuzzyCompare(scaleX, scaleY) &&
         m_pAspectRatios.testAnyFlag(PreserveAspectRatio::xyMask)) {
@@ -168,8 +181,19 @@ void QSvgSymbolLike::setPainterToRectAndAdjustment(QPainter *p) const
             offsetY -= yOverflow;
     }
 
-    p->translate(offsetX - m_refP.x() * scaleX, offsetY - m_refP.y() * scaleY);
-    p->scale(scaleX, scaleY);
+    xform.translate(offsetX - m_refP.x() * scaleX, offsetY - m_refP.y() * scaleY);
+    xform.scale(scaleX, scaleY);
+
+    return xform;
+}
+
+void QSvgSymbolLike::setPainterToRectAndAdjustment(QPainter *p) const
+{
+    QRectF clip = clipRect();
+    if (!clip.isEmpty())
+        p->setClipRect(clip);
+
+    p->setTransform(aspectRatioTransform(), true);
 }
 
 QSvgSymbol::QSvgSymbol(QSvgNode *parent, QRectF bounds, QRectF viewBox, QPointF refP,
@@ -179,20 +203,19 @@ QSvgSymbol::QSvgSymbol(QSvgNode *parent, QRectF bounds, QRectF viewBox, QPointF 
 {
 }
 
+QSvgSymbol::~QSvgSymbol()
+    = default;
+
 void QSvgSymbol::drawCommand(QPainter *p, QSvgExtraStates &states)
 {
     if (!states.inUse) //Symbol is only drawn when within a use node.
         return;
 
-    QList<QSvgNode*>::iterator itr = m_renderers.begin();
-
     p->save();
     setPainterToRectAndAdjustment(p);
-    while (itr != m_renderers.end()) {
-        QSvgNode *node = *itr;
+    for (const auto &node : renderers()) {
         if ((node->isVisible()) && (node->displayMode() != QSvgNode::NoneMode))
             node->draw(p, states);
-        ++itr;
     }
     p->restore();
 }
@@ -211,18 +234,21 @@ QSvgMarker::QSvgMarker(QSvgNode *parent, QRectF bounds, QRectF viewBox, QPointF 
     , m_markerUnits(markerUnits)
 {
     // apply the svg standard style
-    QSvgFillStyle *fillProp = new QSvgFillStyle();
+    QSvgFillStylePtr fillProp = std::make_unique<QSvgFillStyle>();
     fillProp->setBrush(Qt::black);
-    appendStyleProperty(fillProp, QStringLiteral(""));
+    appendStyleProperty(std::move(fillProp));
 
-    QSvgStrokeStyle *strokeProp = new QSvgStrokeStyle();
+    QSvgStrokeStylePtr strokeProp = std::make_unique<QSvgStrokeStyle>();
     strokeProp->setMiterLimit(4);
     strokeProp->setWidth(1);
     strokeProp->setLineCap(Qt::FlatCap);
     strokeProp->setLineJoin(Qt::SvgMiterJoin);
     strokeProp->setStroke(Qt::NoBrush);
-    appendStyleProperty(strokeProp, QStringLiteral(""));
+    appendStyleProperty(std::move(strokeProp));
 }
+
+QSvgMarker::~QSvgMarker()
+    = default;
 
 QSvgFilterContainer::QSvgFilterContainer(QSvgNode *parent, const QSvgRectF &bounds,
                                          QtSvg::UnitTypes filterUnits, QtSvg::UnitTypes primitiveUnits)
@@ -234,6 +260,9 @@ QSvgFilterContainer::QSvgFilterContainer(QSvgNode *parent, const QSvgRectF &boun
 {
 
 }
+
+QSvgFilterContainer::~QSvgFilterContainer()
+    = default;
 
 bool QSvgFilterContainer::shouldDrawNode(QPainter *, QSvgExtraStates &) const
 {
@@ -249,16 +278,12 @@ void QSvgMarker::drawCommand(QPainter *p, QSvgExtraStates &states)
         return;
     QScopedValueRollback<bool> recursingGuard(m_recursing, true);
 
-    QList<QSvgNode*>::iterator itr = m_renderers.begin();
-
     p->save();
     setPainterToRectAndAdjustment(p);
 
-    while (itr != m_renderers.end()) {
-        QSvgNode *node = *itr;
+    for (const auto &node : renderers()) {
         if ((node->isVisible()) && (node->displayMode() != QSvgNode::NoneMode))
             node->draw(p, states);
-        ++itr;
     }
     p->restore();
 }
@@ -311,12 +336,9 @@ QList<PositionMarkerPair> markersForNode(const QSvgNode *node)
     }
     case QSvgNode::Polyline:
     case QSvgNode::Polygon: {
-        const QSvgPolyline *polyline = static_cast<const QSvgPolyline*>(node);
-        const QSvgPolygon *polygon = static_cast<const QSvgPolygon*>(node);
-
         const QPolygonF &polyData = (node->type() == QSvgNode::Polyline)
-                ? polyline->polygon()
-                : polygon->polygon();
+                ? static_cast<const QSvgPolyline*>(node)->polygon()
+                : static_cast<const QSvgPolygon*>(node)->polygon();
 
         if (node->hasMarkerStart() && polyData.size() > 1) {
             QLineF line(polyData.at(0), polyData.at(1));
@@ -419,9 +441,10 @@ void QSvgMarker::drawHelper(const QSvgNode *node, QPainter *p,
     const bool isPainting = (boundingRect == nullptr);
     const auto markers = markersForNode(node);
     for (auto &i : markers) {
-        QSvgMarker *markNode = static_cast<QSvgMarker*>(node->document()->namedNode(i.markerId));
-        if (!markNode)
+        QSvgNode *referencedNode = states.doc()->namedNode(i.markerId);
+        if (!referencedNode || referencedNode->type() != QSvgNode::Marker)
             continue;
+        QSvgMarker *markNode = static_cast<QSvgMarker *>(referencedNode);
 
         p->save();
         p->translate(i.x, i.y);
@@ -478,9 +501,8 @@ QImage QSvgFilterContainer::applyFilter(const QImage &buffer, QPainter *p, const
 
     bool requiresSourceAlpha = false;
 
-    const QList<QSvgNode *> children = renderers();
-    for (const QSvgNode *renderer : children) {
-        const QSvgFeFilterPrimitive *filter = QSvgFeFilterPrimitive::castToFilterPrimitive(renderer);
+    for (const auto &node : renderers()) {
+        const QSvgFeFilterPrimitive *filter = QSvgFeFilterPrimitive::castToFilterPrimitive(node.get());
         if (filter && filter->requiresSourceAlpha()) {
             requiresSourceAlpha = true;
             break;
@@ -492,12 +514,12 @@ QImage QSvgFilterContainer::applyFilter(const QImage &buffer, QPainter *p, const
         proxyAlpha.setOffset(proxy.offset());
         if (proxyAlpha.isNull())
             return buffer;
-        buffers[QStringLiteral("SourceAlpha")] = proxyAlpha;
+        buffers[QStringLiteral("SourceAlpha")] = std::move(proxyAlpha);
     }
 
     QImage result;
-    for (const QSvgNode *renderer : children) {
-        const QSvgFeFilterPrimitive *filter = QSvgFeFilterPrimitive::castToFilterPrimitive(renderer);
+    for (const auto &node : renderers()) {
+        const QSvgFeFilterPrimitive *filter = QSvgFeFilterPrimitive::castToFilterPrimitive(node.get());
         if (filter) {
             result = filter->apply(buffers, p, bounds, localFilterRegion, m_primitiveUnits, m_filterUnits);
             if (!result.isNull()) {
@@ -530,32 +552,44 @@ QSvgNode::Type QSvgFilterContainer::type() const
 }
 
 
-inline static bool isSupportedSvgFeature(const QString &str)
+inline static bool isSupportedSvgFeature(QStringView str)
 {
-    static const QStringList wordList = {
-        QStringLiteral("http://www.w3.org/Graphics/SVG/feature/1.2/#Text"),
-        QStringLiteral("http://www.w3.org/Graphics/SVG/feature/1.2/#Shape"),
-        QStringLiteral("http://www.w3.org/Graphics/SVG/feature/1.2/#SVG"),
-        QStringLiteral("http://www.w3.org/Graphics/SVG/feature/1.2/#Structure"),
-        QStringLiteral("http://www.w3.org/Graphics/SVG/feature/1.2/#SolidColor"),
-        QStringLiteral("http://www.w3.org/Graphics/SVG/feature/1.2/#Hyperlinking"),
-        QStringLiteral("http://www.w3.org/Graphics/SVG/feature/1.2/#CoreAttribute"),
-        QStringLiteral("http://www.w3.org/Graphics/SVG/feature/1.2/#XlinkAttribute"),
-        QStringLiteral("http://www.w3.org/Graphics/SVG/feature/1.2/#SVG-static"),
-        QStringLiteral("http://www.w3.org/Graphics/SVG/feature/1.2/#OpacityAttribute"),
-        QStringLiteral("http://www.w3.org/Graphics/SVG/feature/1.2/#Gradient"),
-        QStringLiteral("http://www.w3.org/Graphics/SVG/feature/1.2/#Font"),
-        QStringLiteral("http://www.w3.org/Graphics/SVG/feature/1.2/#Image"),
-        QStringLiteral("http://www.w3.org/Graphics/SVG/feature/1.2/#ConditionalProcessing"),
-        QStringLiteral("http://www.w3.org/Graphics/SVG/feature/1.2/#Extensibility"),
-        QStringLiteral("http://www.w3.org/Graphics/SVG/feature/1.2/#GraphicsAttribute"),
-        QStringLiteral("http://www.w3.org/Graphics/SVG/feature/1.2/#Prefetch"),
-        QStringLiteral("http://www.w3.org/Graphics/SVG/feature/1.2/#PaintAttribute"),
-        QStringLiteral("http://www.w3.org/Graphics/SVG/feature/1.2/#ConditionalProcessingAttribute"),
-        QStringLiteral("http://www.w3.org/Graphics/SVG/feature/1.2/#ExternalResourcesRequiredAttribute")
-    };
+    constexpr auto prefix_1_2 = "http://www.w3.org/Graphics/SVG/feature/1.2/#"_L1;
+    if (str.startsWith(prefix_1_2)) {
+        const auto suffix = str.sliced(prefix_1_2.size());
 
-    return wordList.contains(str);
+        constexpr auto features = qOffsetStringArray(
+            "Text",
+            "Shape",
+            "SVG",
+            "Structure",
+            "SolidColor",
+            "Hyperlinking",
+            "CoreAttribute",
+            "XlinkAttribute",
+            "SVG-static",
+            "OpacityAttribute",
+            "Gradient",
+            "Font",
+            "Image",
+            "ConditionalProcessing",
+            "Extensibility",
+            "GraphicsAttribute",
+            "Prefetch",
+            "PaintAttribute",
+            "ConditionalProcessingAttribute",
+            "ExternalResourcesRequiredAttribute"
+        );
+
+        // This is
+        //    return features.contains(suffix);
+        // but QOffsetStringArray does't support heterogeneous contains()
+        for (int i = 0; i < features.count(); ++i)
+            if (suffix == QLatin1StringView{features.at(i)})
+                return true;
+    } // 1.2
+
+    return false;
 }
 
 static inline bool isSupportedSvgExtension(const QString &)
@@ -570,12 +604,12 @@ QSvgSwitch::QSvgSwitch(QSvgNode *parent)
     init();
 }
 
+QSvgSwitch::~QSvgSwitch()
+    = default;
+
 QSvgNode *QSvgSwitch::childToRender() const
 {
-    auto itr = m_renderers.begin();
-
-    while (itr != m_renderers.end()) {
-        QSvgNode *node = *itr;
+    for (const auto &node : renderers()) {
         if (node->isVisible() && (node->displayMode() != QSvgNode::NoneMode)) {
             const QStringList &features  = node->requiredFeatures();
             const QStringList &extensions = node->requiredExtensions();
@@ -622,10 +656,8 @@ QSvgNode *QSvgSwitch::childToRender() const
                 okToRender = false;
 
             if (okToRender)
-                return node;
+                return node.get();
         }
-
-        ++itr;
     }
 
     return nullptr;
@@ -656,7 +688,7 @@ QRectF QSvgStructureNode::internalBounds(QPainter *p, QSvgExtraStates &states) c
     QRectF bounds;
     if (!m_recursing) {
         QScopedValueRollback<bool> guard(m_recursing, true);
-        for (QSvgNode *node : std::as_const(m_renderers))
+        for (const auto &node : renderers())
             bounds |= node->bounds(p, states);
     }
     return bounds;
@@ -667,7 +699,7 @@ QRectF QSvgStructureNode::decoratedInternalBounds(QPainter *p, QSvgExtraStates &
     QRectF bounds;
     if (!m_recursing) {
         QScopedValueRollback<bool> guard(m_recursing, true);
-        for (QSvgNode *node : std::as_const(m_renderers))
+        for (const auto &node : renderers())
             bounds |= node->decoratedBounds(p, states);
     }
     return bounds;
@@ -676,14 +708,52 @@ QRectF QSvgStructureNode::decoratedInternalBounds(QPainter *p, QSvgExtraStates &
 QSvgNode* QSvgStructureNode::previousSiblingNode(QSvgNode *n) const
 {
     QSvgNode *prev = nullptr;
-    QList<QSvgNode*>::const_iterator itr = m_renderers.constBegin();
-    for (; itr != m_renderers.constEnd(); ++itr) {
-        QSvgNode *node = *itr;
-        if (node == n)
+    for (const auto &node : renderers()) {
+        if (node.get() == n)
             return prev;
-        prev = node;
+        prev = node.get();
     }
     return prev;
+}
+
+void QSvgStructureNode::releaseDescendants()
+{
+    // This function will release the descendants of a QSvgStructureNode from bottom to top.
+    // Destructors are never called recursively in this case and stack overflow will not
+    // happen in deeply nested trees.
+    // This function does not allocate any memory at the cost of sacrificing some performance to
+    // make it safe to be called from a destructor.
+    QSvgNode *currentParent = this;
+    while (currentParent) {
+        switch (currentParent->type()) {
+        case QSvgNode::Doc:
+        case QSvgNode::Defs:
+        case QSvgNode::Group:
+        case QSvgNode::Mask:
+        case QSvgNode::Pattern:
+        case QSvgNode::Symbol:
+        case QSvgNode::Switch:
+        case QSvgNode::Filter:
+        {
+            QSvgStructureNode *currentParentSN = static_cast<QSvgStructureNode *>(currentParent);
+            if (currentParentSN->m_renderers.empty()) {
+                currentParent = currentParent->parent();
+                if (currentParent)
+                    static_cast<QSvgStructureNode *>(currentParent)->m_renderers.pop_front();
+            } else {
+                Q_ASSERT(currentParentSN->m_renderers.front().get()->parent() == currentParent);
+                currentParent = currentParentSN->m_renderers.front().get();
+            }
+        }
+            break;
+        default:
+            currentParent = currentParent->parent();
+            if (currentParent)
+                static_cast<QSvgStructureNode *>(currentParent)->m_renderers.pop_front();
+            break;
+        }
+    }
+    Q_ASSERT(this->m_renderers.empty());
 }
 
 QSvgMask::QSvgMask(QSvgNode *parent, QSvgRectF bounds,
@@ -693,6 +763,9 @@ QSvgMask::QSvgMask(QSvgNode *parent, QSvgRectF bounds,
     , m_contentUnits(contentUnits)
 {
 }
+
+QSvgMask::~QSvgMask()
+    = default;
 
 bool QSvgMask::shouldDrawNode(QPainter *, QSvgExtraStates &) const
 {
@@ -726,8 +799,9 @@ QImage QSvgMask::createMask(QPainter *p, QSvgExtraStates &states, const QRectF &
 
     // Chrome seems to return the mask of the mask if a mask is set on the mask
     if (this->hasMask()) {
-        QSvgMask *maskNode = static_cast<QSvgMask*>(document()->namedNode(this->maskId()));
-        if (maskNode) {
+        QSvgNode *referencedNode = states.doc()->namedNode(this->maskId());
+        if (referencedNode && referencedNode->type() == QSvgNode::Mask) {
+            QSvgMask *maskNode = static_cast<QSvgMask *>(referencedNode);
             QRectF boundsRect;
             return maskNode->createMask(p, states, localRect, &boundsRect);
         }
@@ -743,7 +817,9 @@ QImage QSvgMask::createMask(QPainter *p, QSvgExtraStates &states, const QRectF &
     QPainter painter(&mask);
     initPainter(&painter);
 
-    QSvgExtraStates maskNodeStates;
+    QSvgExtraStates maskNodeStates(states.doc());
+    maskNodeStates.trustedSource = states.trustedSource;
+    maskNodeStates.remainingNestedNodes = states.remainingNestedNodes;
     applyStyleRecursive(&painter, maskNodeStates);
 
     // The transformation of the mask node is not relevant. What matters are the contentUnits
@@ -759,12 +835,10 @@ QImage QSvgMask::createMask(QPainter *p, QSvgExtraStates &states, const QRectF &
     }
 
     // Draw all content items of the mask to generate the mask
-    QList<QSvgNode*>::const_iterator itr = m_renderers.begin();
-    while (itr != m_renderers.end()) {
-        QSvgNode *node = *itr;
+    for (const auto &node : renderers())
+    {
         if ((node->isVisible()) && (node->displayMode() != QSvgNode::NoneMode))
             node->draw(&painter, maskNodeStates);
-        ++itr;
     }
 
     for (int i=0; i < mask.height(); i++) {
@@ -802,11 +876,15 @@ QSvgPattern::QSvgPattern(QSvgNode *parent, QSvgRectF bounds, QRectF viewBox,
     m_rect(bounds),
     m_viewBox(viewBox),
     m_contentUnits(contentUnits),
+    m_isRendering(false),
     m_transform(transform)
 
 {
 
 }
+
+QSvgPattern::~QSvgPattern()
+    = default;
 
 bool QSvgPattern::shouldDrawNode(QPainter *, QSvgExtraStates &) const
 {
@@ -864,9 +942,14 @@ QImage QSvgPattern::patternImage(QPainter *p, QSvgExtraStates &states, const QSv
     QSize imageSize;
     imageSize.setWidth(qCeil(patternBoundingBox.width() * t.m11() * m_transform.m11()));
     imageSize.setHeight(qCeil(patternBoundingBox.height() * t.m22() * m_transform.m22()));
+    if (imageSize.isEmpty())
+        return QImage(); // Avoid division by zero in calculateAppliedTransform()
 
     calculateAppliedTransform(t, peBoundingBox, imageSize);
-    return renderPattern(imageSize, contentScaleFactorX, contentScaleFactorY);
+    if (states.doc()->isCalculatingImplicitViewBox())
+        return QImage(imageSize, QImage::Format_ARGB32); // dummy image to avoid endless recursion
+    else
+        return renderPattern(imageSize, std::make_pair(contentScaleFactorX, contentScaleFactorY), states);
 }
 
 QSvgNode::Type QSvgPattern::type() const
@@ -874,9 +957,9 @@ QSvgNode::Type QSvgPattern::type() const
     return Pattern;
 }
 
-QImage QSvgPattern::renderPattern(QSize size, qreal contentScaleX, qreal contentScaleY)
+QImage QSvgPattern::renderPattern(QSize size, std::pair<qreal, qreal> scale, const QSvgExtraStates &states)
 {
-    if (size.isEmpty() || !qIsFinite(contentScaleX) || !qIsFinite(contentScaleY))
+    if (size.isEmpty() || !qIsFinite(scale.first) || !qIsFinite(scale.second))
         return defaultPattern();
 
     // Allocate a QImage to draw the pattern in with the calculated size.
@@ -887,9 +970,18 @@ QImage QSvgPattern::renderPattern(QSize size, qreal contentScaleX, qreal content
     }
     pattern.fill(Qt::transparent);
 
+    if (m_isRendering) {
+        qCWarning(lcSvgDraw) << "The pattern is trying to render itself recursively. "
+                                "Returning a transparent QImage of the right size.";
+        return pattern;
+    }
+    QScopedValueRollback<bool> guard(m_isRendering, true);
+
     // Draw the pattern using our QPainter.
     QPainter patternPainter(&pattern);
-    QSvgExtraStates patternStates;
+    QSvgExtraStates patternStates(states.doc());
+    patternStates.trustedSource = states.trustedSource;
+    patternStates.remainingNestedNodes = states.remainingNestedNodes;
     initPainter(&patternPainter);
     applyStyleRecursive(&patternPainter, patternStates);
     patternPainter.resetTransform();
@@ -897,13 +989,12 @@ QImage QSvgPattern::renderPattern(QSize size, qreal contentScaleX, qreal content
     // According to the <pattern> definition, if viewBox exists then patternContentUnits
     // is ignored
     if (m_viewBox.isNull())
-        patternPainter.scale(contentScaleX, contentScaleY);
+        patternPainter.scale(scale.first, scale.second);
     else
         patternPainter.setWindow(m_viewBox.toRect());
 
     // Draw all this Pattern children nodes with our QPainter,
-    // no need to use any Extra States
-    for (QSvgNode *node : m_renderers)
+    for (const auto &node : renderers())
         node->draw(&patternPainter, patternStates);
 
     revertStyleRecursive(&patternPainter, patternStates);

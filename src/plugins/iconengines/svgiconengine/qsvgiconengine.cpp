@@ -1,5 +1,7 @@
 // Copyright (C) 2016 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:default
+
 #include "qsvgiconengine.h"
 
 #ifndef QT_NO_SVGRENDERER
@@ -54,7 +56,7 @@ public:
 
     QHash<int, QString> svgFiles;
     QHash<int, QByteArray> svgBuffers;
-    QHash<int, QPixmap> addedPixmaps;
+    QMultiHash<int, QPixmap> addedPixmaps;
     int serialNum = 0;
     static QAtomicInt lastSerialNum;
 };
@@ -84,9 +86,14 @@ QSize QSvgIconEngine::actualSize(const QSize &size, QIcon::Mode mode,
                                  QIcon::State state)
 {
     if (!d->addedPixmaps.isEmpty()) {
-        QPixmap pm = d->addedPixmaps.value(d->hashKey(mode, state));
-        if (!pm.isNull() && pm.size() == size)
-            return size;
+        const auto key = d->hashKey(mode, state);
+        auto it = d->addedPixmaps.constFind(key);
+        while (it != d->addedPixmaps.cend() && it.key() == key) {
+            const auto &pm = it.value();
+            if (!pm.isNull() && pm.size() == size)
+                return size;
+            ++it;
+        }
     }
 
     QPixmap pm = pixmap(size, mode, state);
@@ -179,12 +186,19 @@ QPixmap QSvgIconEngine::scaledPixmap(const QSize &size, QIcon::Mode mode, QIcon:
         return pm;
 
     if (!d->addedPixmaps.isEmpty()) {
+        const auto realSize = size * scale;
         const auto key = d->hashKey(mode, state);
-        pm = d->addedPixmaps.value(key);
-        if (!pm.isNull() && pm.size() == size * scale && pm.devicePixelRatio() == scale)
-            return pm;
-        if (pm.isNull())
-            d->addedPixmaps.remove(key);
+        auto it = d->addedPixmaps.constFind(key);
+        while (it != d->addedPixmaps.cend() && it.key() == key) {
+            const auto &pm = it.value();
+            if (!pm.isNull()) {
+                // we don't care about dpr here - don't use QSvgIconEngine when
+                // there are a lot of raster images are to handle.
+                if (pm.size() == realSize)
+                    return pm;
+            }
+            ++it;
+        }
     }
 
     QSvgRenderer renderer;
@@ -293,7 +307,7 @@ QString QSvgIconEngine::key() const
     return QLatin1String("svg");
 }
 
-QIconEngine *QSvgIconEngine::clone() const
+QSvgIconEngine *QSvgIconEngine::clone() const
 {
     return new QSvgIconEngine(*this);
 }

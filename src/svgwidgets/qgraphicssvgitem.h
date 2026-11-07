@@ -1,5 +1,7 @@
 // Copyright (C) 2020 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:default
+
 #ifndef QGRAPHICSSVGITEM_H
 #define QGRAPHICSSVGITEM_H
 
@@ -25,6 +27,7 @@ class Q_SVGWIDGETS_EXPORT QGraphicsSvgItem : public QGraphicsObject
 public:
     QGraphicsSvgItem(QGraphicsItem *parentItem = nullptr);
     QGraphicsSvgItem(const QString &fileName, QGraphicsItem *parentItem = nullptr);
+    ~QGraphicsSvgItem() override;
 
     void setSharedRenderer(QSvgRenderer *renderer);
     QSvgRenderer *renderer() const;

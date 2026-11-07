@@ -1,8 +1,8 @@
 // Copyright (C) 2016 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:default
 
-#ifndef QSVGIOHANDLER_H
-#define QSVGIOHANDLER_H
+#pragma once
 
 #include <QtGui/qimageiohandler.h>
 
@@ -28,6 +28,14 @@ public:
     void setOption(ImageOption option, const QVariant & value) override;
     bool supportsOption(ImageOption option) const override;
 
+    // Animation support for QMovie / AnimatedImage
+    bool jumpToNextImage() override;
+    bool jumpToImage(int imageNumber) override;
+    int loopCount() const override;
+    int imageCount() const override;
+    int nextImageDelay() const override;
+    int currentImageNumber() const override;
+
 private:
     QSvgIOHandlerPrivate *d;
 };
@@ -35,4 +43,3 @@ private:
 QT_END_NAMESPACE
 
 #endif // QT_NO_SVGRENDERER
-#endif // QSVGIOHANDLER_H
