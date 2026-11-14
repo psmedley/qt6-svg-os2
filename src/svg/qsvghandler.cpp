@@ -1,5 +1,6 @@
 // Copyright (C) 2022 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:critical reason:data-parser
 
 #include "qplatformdefs.h"
 
@@ -17,6 +18,8 @@
 #include "qbrush.h"
 #include "qcolor.h"
 #include "qtextformat.h"
+
+#include <QtCore/private/qdataurl_p.h>
 #include "qlist.h"
 #include "qfileinfo.h"
 #include "qfile.h"
@@ -1360,7 +1363,7 @@ static void parseFont(QSvgNode *node,
         fontStyle = new QSvgFontStyle;
     if (!attributes.fontFamily.isEmpty() && attributes.fontFamily != QT_INHERIT) {
         QString family = attributes.fontFamily.toString().trimmed();
-        if (family.at(0) == QLatin1Char('\'') || family.at(0) == QLatin1Char('\"'))
+        if (!family.isEmpty() && (family.at(0) == QLatin1Char('\'') || family.at(0) == QLatin1Char('\"')))
             family = family.mid(1, family.size() - 2);
         fontStyle->setFamily(family);
     }
@@ -2885,11 +2888,9 @@ static QSvgNode *createImageNode(QSvgNode *parent,
     } filenameType = NotLoaded;
 
     if (filename.startsWith(QLatin1String("data"))) {
-        int idx = filename.lastIndexOf(QLatin1String("base64,"));
-        if (idx != -1) {
-            idx += 7;
-            const QString dataStr = filename.mid(idx);
-            QByteArray data = QByteArray::fromBase64(dataStr.toLatin1());
+        QString mimeType;
+        QByteArray data;
+        if (qDecodeDataUrl(filename, mimeType, data)) {
             image = QImage::fromData(data);
             filenameType = LoadedFromData;
         }
@@ -4662,8 +4663,7 @@ void QSvgHandler::parse()
             // this point is to do what everyone else seems to do and
             // ignore the reported namespaceUri completely.
             if (remainingUnfinishedElements
-                    && startElement(xml->name().toString(), xml->attributes())
-                    && !detectCyclesAndWarn(m_doc)) {
+                    && startElement(xml->name().toString(), xml->attributes())) {
                 --remainingUnfinishedElements;
             } else {
                 delete m_doc;
@@ -4733,46 +4733,46 @@ bool QSvgHandler::startElement(const QString &localName,
 
     if (FactoryMethod method = findGroupFactory(localName, options())) {
         //group
-        node = method(m_doc ? m_nodes.top() : 0, attributes, this);
-
-        if (node) {
-            if (!m_doc) {
+        if (!m_doc) {
+            node = method(nullptr, attributes, this);
+            if (node) {
                 Q_ASSERT(node->type() == QSvgNode::Doc);
                 m_doc = static_cast<QSvgTinyDocument*>(node);
-            } else {
-                switch (m_nodes.top()->type()) {
-                case QSvgNode::Doc:
-                case QSvgNode::Group:
-                case QSvgNode::Defs:
-                case QSvgNode::Switch:
-                case QSvgNode::Mask:
-                case QSvgNode::Symbol:
-                case QSvgNode::Marker:
-                case QSvgNode::Pattern:
-                {
+            }
+        } else {
+            switch (m_nodes.top()->type()) {
+            case QSvgNode::Doc:
+            case QSvgNode::Group:
+            case QSvgNode::Defs:
+            case QSvgNode::Switch:
+            case QSvgNode::Mask:
+            case QSvgNode::Symbol:
+            case QSvgNode::Marker:
+            case QSvgNode::Pattern:
+            {
+                node = method(m_nodes.top(), attributes, this);
+                if (node) {
                     QSvgStructureNode *group =
                         static_cast<QSvgStructureNode*>(m_nodes.top());
                     group->addChild(node, someId(attributes));
                 }
-                    break;
-                default:
-                    const QByteArray msg = QByteArrayLiteral("Could not add child element to parent element because the types are incorrect.");
-                    qCWarning(lcSvgHandler, "%s", prefixMessage(msg, xml).constData());
-                    delete node;
-                    node = 0;
-                    break;
-                }
             }
+                break;
+            default:
+                const QByteArray msg = QByteArrayLiteral("Could not add child element to parent element because the types are incorrect.");
+                qCWarning(lcSvgHandler, "%s", prefixMessage(msg, xml).constData());
+                break;
+            }
+        }
 
-            if (node) {
-                parseCoreNode(node, attributes);
+        if (node) {
+            parseCoreNode(node, attributes);
 #ifndef QT_NO_CSSPARSER
-                cssStyleLookup(node, this, m_selector);
+            cssStyleLookup(node, this, m_selector);
 #endif
-                parseStyle(node, attributes, this);
-                if (node->type() == QSvgNode::Filter)
-                    m_toBeResolved.append(node);
-            }
+            parseStyle(node, attributes, this);
+            if (node->type() == QSvgNode::Filter)
+                m_toBeResolved.append(node);
         }
     } else if (FactoryMethod method = findGraphicsFactory(localName, options())) {
         //rendering element

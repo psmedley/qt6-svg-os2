@@ -27,6 +27,8 @@ public:
 
 private slots:
     void getSetCheck();
+    void emptyRect_data();
+    void emptyRect();
     void inexistentUrl();
     void emptyUrl();
     void invalidUrl_data();
@@ -67,8 +69,10 @@ private slots:
     void oss_fuzz_24738();
     void oss_fuzz_61586();
     void oss_fuzz_42532991();
+    void oss_fuzz_390467765();
     void oss_fuzz_399769595();
     void imageRendering();
+    void imageMalformedDataUrl();
     void illegalAnimateTransform_data();
     void illegalAnimateTransform();
     void tSpanLineBreak();
@@ -78,6 +82,7 @@ private slots:
     void testSymbol();
     void testMarker();
     void testPatternElement();
+    void testMisplacedElement();
     void testCycles();
     void testFeFlood();
     void testFeOffset();
@@ -130,6 +135,29 @@ void tst_QSvgRenderer::getSetCheck()
     QVERIFY(!obj1.isAnimationEnabled());
     obj1.setAnimationEnabled(true);
     QVERIFY(obj1.isAnimationEnabled());
+}
+
+void tst_QSvgRenderer::emptyRect_data()
+{
+    // Testing rects with zero width or height or no given value
+    // Those caused divisions by zero, e.g. QTBUG-49160 and oss-fuzz issue 23588
+    // UBSAN is required to see those divisions by zero
+    QTest::addColumn<QByteArray>("svg");
+    QTest::newRow("nothing") << QByteArray(R"(<svg><rect/></svg>)");
+    QTest::newRow("no width zero height") << QByteArray(R"(<svg><rect height="0"/></svg>)");
+    QTest::newRow("zero width no height") << QByteArray(R"(<svg><rect width="0"/></svg>)");
+    QTest::newRow("no width") << QByteArray(R"(<svg><rect height="1"/></svg>)");
+    QTest::newRow("no height") << QByteArray(R"(<svg><rect width="1"/></svg>)");
+    QTest::newRow("both zero") << QByteArray(R"(<svg><rect width="0" height="0"/></svg>)");
+    QTest::newRow("zero width") << QByteArray(R"(<svg><rect width="0" height="1"/></svg>)");
+    QTest::newRow("zero heigth") << QByteArray(R"(<svg><rect width="1" height="0"/></svg>)");
+}
+
+void tst_QSvgRenderer::emptyRect()
+{
+    QFETCH(QByteArray, svg);
+    QSvgRenderer renderer(svg);
+    QVERIFY(renderer.isValid());
 }
 
 void tst_QSvgRenderer::inexistentUrl()
@@ -476,6 +504,9 @@ void tst_QSvgRenderer::nestedQXmlStreamReader() const
 
 void tst_QSvgRenderer::stylePropagation() const
 {
+#if !QT_CONFIG(cssparser)
+    QSKIP("cssparser feature disabled, skipping test");
+#else
     QByteArray data("<svg>"
                       "<g id='foo' style='fill:#ffff00;'>"
                         "<g id='bar' style='fill:#ff00ff;'>"
@@ -519,6 +550,7 @@ void tst_QSvgRenderer::stylePropagation() const
 
     QCOMPARE(image1, image2);
     QCOMPARE(image1, image3);
+#endif // QT_CONFIG(cssparser)
 }
 
 static qreal transformNorm(const QTransform &m)
@@ -616,7 +648,7 @@ void tst_QSvgRenderer::boundsOnElement() const
                         "<text id=\"textD\" transform=\"matrix(1 0 0 2 30 40)\">Lorem ipsum</text>"
                       "</g>"
                     "</svg>");
-    
+
     qreal sqrt2 = qSqrt(2);
     QSvgRenderer renderer(data);
     QCOMPARE(renderer.boundsOnElement(QLatin1String("sjokade")), QRectF(-10 * sqrt2, -10 * sqrt2, 20 * sqrt2, 20 * sqrt2));
@@ -810,6 +842,12 @@ void tst_QSvgRenderer::recursiveRefs_data()
                                           "<linearGradient id='2' xlink:href='#0'/>"
                                           "<rect x='0' y='0' width='20' height='20' fill='url(#0)'/>"
                                           "</svg>");
+
+    QTest::newRow("pattern") << QByteArray("<svg><pattern id=\"pattern\" width=\"4\" height=\"4\""
+                                           "fill=\"url(#pattern)\">"
+                                           "<rect width=\"2\" height=\"2\" fill=\" \"/></pattern>"
+                                           "<rect width=\"2\" height=\"2\" fill=\"url(#pattern)\"/>"
+                                           "</svg>");
 }
 
 void tst_QSvgRenderer::recursiveRefs()
@@ -1028,20 +1066,20 @@ void tst_QSvgRenderer::opacity()
     const char *svg = R"svg(
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="-1 -1 37 37">
     <g transform="translate(0, 0)">
-        <rect style="fill:#808080" x="0" y="0" width="10" height="10" fill-opacity="0.5"/>
-        <rect style="fill:#808080" x="5" y="5" width="10" height="10" fill-opacity="0.5"/>
+        <rect fill="#808080" x="0" y="0" width="10" height="10" fill-opacity="0.5"/>
+        <rect fill="#808080" x="5" y="5" width="10" height="10" fill-opacity="0.5"/>
     </g>
     <g transform="translate(20, 0)" fill-opacity="0.5">
-        <rect style="fill:#808080" x="0" y="0" width="10" height="10"/>
-        <rect style="fill:#808080" x="5" y="5" width="10" height="10"/>
+        <rect fill="#808080" x="0" y="0" width="10" height="10"/>
+        <rect fill="#808080" x="5" y="5" width="10" height="10"/>
     </g>
     <g transform="translate(0, 20)">
-        <rect style="fill:#808080" x="0" y="0" width="10" height="10" opacity="0.5"/>
-        <rect style="fill:#808080" x="5" y="5" width="10" height="10" opacity="0.5"/>
+        <rect fill="#808080" x="0" y="0" width="10" height="10" opacity="0.5"/>
+        <rect fill="#808080" x="5" y="5" width="10" height="10" opacity="0.5"/>
     </g>
     <g transform="translate(20, 20)" opacity="0.5">
-        <rect style="fill:#808080" x="0" y="0" width="10" height="10"/>
-        <rect style="fill:#808080" x="5" y="5" width="10" height="10"/>
+        <rect fill="#808080" x="0" y="0" width="10" height="10"/>
+        <rect fill="#808080" x="5" y="5" width="10" height="10"/>
     </g>
     </svg>
     )svg";
@@ -1739,6 +1777,12 @@ void tst_QSvgRenderer::oss_fuzz_42532991()
     QSvgRenderer().load(QByteArray("<svg><pattern height=\"3\" width=\"9\" id=\"c\"><path d=\"v4T1-\" stroke=\"url(#c)\"><symbol>"));
 }
 
+void tst_QSvgRenderer::oss_fuzz_390467765()
+{
+    // resulted in stack overflow
+    QSvgRenderer().load(QByteArray("<svg stroke=\"url(#c)\"><pattern height=\"2\" width=\"4\" id=\"c\"/><path stroke=\"#F00\" d=\"v2\"/></svg>"));
+}
+
 void tst_QSvgRenderer::oss_fuzz_399769595()
 {
     // resulted in null pointer deref
@@ -1789,6 +1833,16 @@ void tst_QSvgRenderer::imageRendering() {
         p2.end();
         QCOMPARE(img1, img2);
     }
+}
+
+void tst_QSvgRenderer::imageMalformedDataUrl()
+{
+    // The input below triggered an assert in qDecodeDataUrl() which is used when creating svg
+    // nodes. That assert is fixed and tested in qtbase. Still, the input is invalid and should be
+    // treated as such. The test makes sure that QSvgRenderer properly warns about it.
+    QTest::ignoreMessage(QtWarningMsg, R"(Could not create image from "data:charset,")");
+    QVERIFY(QSvgRenderer().load(
+            QByteArray("<svg><image width=\"1\" height=\"1\" xlink:href=\"data:charset,\"/></svg>")));
 }
 
 void tst_QSvgRenderer::illegalAnimateTransform_data()
@@ -2036,6 +2090,31 @@ void tst_QSvgRenderer::testPatternElement()
     p.end();
 
     QCOMPARE(refImage, image);
+}
+
+void tst_QSvgRenderer::testMisplacedElement()
+{
+    // This input caused a QSvgPattern node to be created with a QSvgPatternStyle referencing to it.
+    // The code then detected that the <pattern> element is misplaced in the <text> element and
+    // deleted it. That left behind the QSvgPatternStyle pointing to the deleted QSvgPattern. That
+    // was reported when running the test with ASAN or UBSAN.
+    QByteArray svg(R"(<svg>
+                      <text><pattern id="ptn" width="4" height="4"/></text>
+                      <g fill="url(#ptn) "/>
+                      </svg>)");
+
+    QImage image(20, 20, QImage::Format_ARGB32_Premultiplied);
+    image.fill(Qt::green);
+    QImage refImage = image.copy();
+
+    QTest::ignoreMessage(QtWarningMsg, "<input>:2:68: Could not add child element to parent "
+                                       "element because the types are incorrect.");
+    QTest::ignoreMessage(QtWarningMsg, "<input>:4:28: Could not resolve property: #ptn");
+
+    QSvgRenderer renderer(svg);
+    QPainter painter(&image);
+    renderer.render(&painter);
+    QCOMPARE(image, refImage);
 }
 
 void tst_QSvgRenderer::testCycles()
